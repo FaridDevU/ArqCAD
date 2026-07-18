@@ -33,7 +33,7 @@ jobs:
     name: ffi C sanitizer (linux)
     runs-on: ubuntu-latest
     env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}/arcforge-cargo-target
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/arcforge-cargo-target
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.95.0
@@ -60,7 +60,7 @@ jobs:
     name: desktop/FFI (windows gnullvm)
     runs-on: windows-latest
     env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}/arcforge-gnullvm-target
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/arcforge-gnullvm-target
       RUST_TOOLCHAIN: 1.95.0-x86_64-pc-windows-gnullvm
     steps:
       - uses: actions/checkout@v4
