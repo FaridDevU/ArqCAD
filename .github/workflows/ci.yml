@@ -1,0 +1,253 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --locked --workspace
+
+  ffi-c-linux:
+    name: ffi C sanitizer (linux)
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/arcforge-cargo-target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - name: Build af-ffi
+        run: cargo build --locked -p af-ffi --release
+      - name: Compile and run C smoke with sanitizers
+        shell: bash
+        run: |
+          set -euo pipefail
+          native_dir="$CARGO_TARGET_DIR/release"
+          smoke="$RUNNER_TEMP/af-ffi-c-smoke"
+          test -f "$native_dir/libaf_ffi.so"
+          cc -std=c11 -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -I "$GITHUB_WORKSPACE/crates/af-ffi/include" \
+            "$GITHUB_WORKSPACE/crates/af-ffi/tests/c_smoke.c" \
+            -L "$native_dir" -Wl,-rpath,"$native_dir" -laf_ffi \
+            -o "$smoke"
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1 \
+            UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+            "$smoke"
+
+  desktop-ffi-windows:
+    name: desktop/FFI (windows gnullvm)
+    runs-on: windows-latest
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/arcforge-gnullvm-target
+      RUST_TOOLCHAIN: 1.95.0-x86_64-pc-windows-gnullvm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.302"
+      - name: Install complete gnullvm host toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Resolve bundled linker and runtime
+        shell: pwsh
+        run: |
+          $sysrootOutput = & rustup run $env:RUST_TOOLCHAIN rustc --print sysroot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $sysroot = ($sysrootOutput | Out-String).Trim()
+          if ([string]::IsNullOrWhiteSpace($sysroot)) { throw "Empty gnullvm sysroot." }
+
+          $toolchainBin = Join-Path $sysroot "lib\rustlib\x86_64-pc-windows-gnullvm\bin"
+          $lld = Join-Path $toolchainBin "rust-lld.exe"
+          $unwind = Join-Path $toolchainBin "libunwind.dll"
+          if (-not (Test-Path -LiteralPath $lld -PathType Leaf)) { throw "Bundled rust-lld.exe not found: $lld" }
+          if (-not (Test-Path -LiteralPath $unwind -PathType Leaf)) { throw "Bundled libunwind.dll not found: $unwind" }
+
+          @(
+            "AF_LIBUNWIND_SOURCE=$unwind"
+            "CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_LINKER=$lld"
+          ) | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+          $toolchainBin | Add-Content -LiteralPath $env:GITHUB_PATH -Encoding utf8
+      - name: Test af-ffi on gnullvm host
+        shell: pwsh
+        run: rustup run $env:RUST_TOOLCHAIN cargo test --locked -p af-ffi
+      - name: Build af-ffi DLL on gnullvm host
+        shell: pwsh
+        run: rustup run $env:RUST_TOOLCHAIN cargo build --locked -p af-ffi --release
+      - name: Stage freshly built native assets
+        shell: pwsh
+        run: |
+          $builtDll = Join-Path $env:CARGO_TARGET_DIR "release\af_ffi.dll"
+          if (-not (Test-Path -LiteralPath $builtDll -PathType Leaf)) { throw "Built af_ffi.dll not found: $builtDll" }
+          if (-not (Test-Path -LiteralPath $env:AF_LIBUNWIND_SOURCE -PathType Leaf)) { throw "Bundled libunwind.dll disappeared." }
+
+          $stage = Join-Path $env:RUNNER_TEMP "arcforge-native-stage"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          $stagedDll = Join-Path $stage "af_ffi.dll"
+          $stagedUnwind = Join-Path $stage "libunwind.dll"
+          Copy-Item -LiteralPath $builtDll -Destination $stagedDll -Force
+          Copy-Item -LiteralPath $env:AF_LIBUNWIND_SOURCE -Destination $stagedUnwind -Force
+
+          $dllHash = (Get-FileHash -LiteralPath $stagedDll -Algorithm SHA256).Hash.ToLowerInvariant()
+          $unwindHash = (Get-FileHash -LiteralPath $stagedUnwind -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            "AF_STAGE=$stage"
+            "AF_DLL_SHA256=$dllHash"
+            "AF_UNWIND_SHA256=$unwindHash"
+          ) | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+      - name: Prove native asset gates fail closed
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $project = Join-Path $env:GITHUB_WORKSPACE "apps\desktop\ArcForge.Native\ArcForge.Native.csproj"
+          $artifacts = Join-Path $env:RUNNER_TEMP "negative-gate-artifacts"
+
+          function Assert-NegativeGate([string]$name, [string]$expected, [string]$nativeDirectory) {
+            $arguments = @(
+              "build", $project, "-c", "Release", "-r", "win-x64", "--nologo",
+              "--artifacts-path", $artifacts
+            )
+            if (-not [string]::IsNullOrEmpty($nativeDirectory)) {
+              $arguments += "-p:ArcCadNativeDirectory=$nativeDirectory"
+            }
+            $output = (& dotnet @arguments 2>&1 | Out-String)
+            $exitCode = $LASTEXITCODE
+            $output | Write-Host
+            if ($exitCode -eq 0) { throw "$name unexpectedly succeeded." }
+            if ($output.IndexOf($expected, [StringComparison]::Ordinal) -lt 0) {
+              throw "$name failed without expected diagnostic: $expected"
+            }
+          }
+
+          $missingDll = Join-Path $env:RUNNER_TEMP "stage-missing-af-ffi"
+          $missingUnwind = Join-Path $env:RUNNER_TEMP "stage-missing-libunwind"
+          New-Item -ItemType Directory -Path $missingDll, $missingUnwind -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path $env:AF_STAGE "libunwind.dll") -Destination $missingDll -Force
+          Copy-Item -LiteralPath (Join-Path $env:AF_STAGE "af_ffi.dll") -Destination $missingUnwind -Force
+
+          Assert-NegativeGate "missing ArcCadNativeDirectory" "ArcCadNativeDirectory is required for win-x64" ""
+          Assert-NegativeGate "missing af_ffi.dll" "af_ffi.dll was not found in ArcCadNativeDirectory" $missingDll
+          Assert-NegativeGate "missing libunwind.dll" "libunwind.dll was not found in ArcCadNativeDirectory" $missingUnwind
+          $global:LASTEXITCODE = 0
+      - name: Publish native smoke and build desktop screenshot
+        shell: pwsh
+        run: |
+          $nativeOut = Join-Path $env:RUNNER_TEMP "native-smoke-output"
+          $desktopOut = Join-Path $env:RUNNER_TEMP "desktop-screenshot-output"
+          $nativeArguments = @(
+            "publish", "tools/native-smoke/ArcForge.Native.Smoke.csproj",
+            "-c", "Release", "-r", "win-x64", "--self-contained", "false", "--nologo",
+            "--artifacts-path", (Join-Path $env:RUNNER_TEMP "native-smoke-artifacts"),
+            "-o", $nativeOut, "-p:ArcCadNativeDirectory=$env:AF_STAGE"
+          )
+          dotnet @nativeArguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $desktopArguments = @(
+            "build", "tools/desktop-screenshot/ArcForge.Desktop.Screenshot.csproj",
+            "-c", "Release", "-r", "win-x64", "--nologo",
+            "--artifacts-path", (Join-Path $env:RUNNER_TEMP "desktop-screenshot-artifacts"),
+            "-o", $desktopOut, "-p:ArcCadNativeDirectory=$env:AF_STAGE"
+          )
+          dotnet @desktopArguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          @(
+            "AF_NATIVE_SMOKE_OUT=$nativeOut"
+            "AF_DESKTOP_SMOKE_OUT=$desktopOut"
+          ) | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+      - name: Verify app-local native asset hashes
+        shell: pwsh
+        run: |
+          foreach ($output in @($env:AF_NATIVE_SMOKE_OUT, $env:AF_DESKTOP_SMOKE_OUT)) {
+            $dll = Join-Path $output "af_ffi.dll"
+            $unwind = Join-Path $output "libunwind.dll"
+            if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { throw "Missing app-local af_ffi.dll: $output" }
+            if (-not (Test-Path -LiteralPath $unwind -PathType Leaf)) { throw "Missing app-local libunwind.dll: $output" }
+            $dllHash = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash
+            $unwindHash = (Get-FileHash -LiteralPath $unwind -Algorithm SHA256).Hash
+            if (-not $dllHash.Equals($env:AF_DLL_SHA256, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "App-local af_ffi.dll hash mismatch: $output"
+            }
+            if (-not $unwindHash.Equals($env:AF_UNWIND_SHA256, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "App-local libunwind.dll hash mismatch: $output"
+            }
+          }
+      - name: Run smokes from decoy cwd with System32-only PATH
+        shell: pwsh
+        run: |
+          $decoyCwd = Join-Path $env:RUNNER_TEMP "decoy-cwd"
+          New-Item -ItemType Directory -Path $decoyCwd -Force | Out-Null
+          $decoy = Join-Path $env:SystemRoot "System32\kernel32.dll"
+          Copy-Item -LiteralPath $decoy -Destination (Join-Path $decoyCwd "af_ffi.dll") -Force
+          Copy-Item -LiteralPath $decoy -Destination (Join-Path $decoyCwd "libunwind.dll") -Force
+
+          $savedPath = $env:PATH
+          $env:PATH = Join-Path $env:SystemRoot "System32"
+          Push-Location $decoyCwd
+          try {
+            $nativeExe = Join-Path $env:AF_NATIVE_SMOKE_OUT "ArcForge.Native.Smoke.exe"
+            $nativeArguments = @(
+              (Join-Path $env:AF_NATIVE_SMOKE_OUT "af_ffi.dll"),
+              $env:AF_DLL_SHA256,
+              (Join-Path $env:AF_NATIVE_SMOKE_OUT "libunwind.dll")
+            )
+            & $nativeExe @nativeArguments
+            if ($LASTEXITCODE -ne 0) { throw "native-smoke exited $LASTEXITCODE" }
+
+            $desktopExe = Join-Path $env:AF_DESKTOP_SMOKE_OUT "ArcForge.Desktop.Screenshot.exe"
+            $desktopArguments = @(
+              (Join-Path $env:AF_DESKTOP_SMOKE_OUT "af_ffi.dll"),
+              $env:AF_DLL_SHA256,
+              (Join-Path $env:AF_DESKTOP_SMOKE_OUT "libunwind.dll")
+            )
+            & $desktopExe @desktopArguments
+            if ($LASTEXITCODE -ne 0) { throw "desktop-screenshot exited $LASTEXITCODE" }
+          }
+          finally {
+            Pop-Location
+            $env:PATH = $savedPath
+          }
+
+  deps-guard:
+    name: deps-guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses
+          rust-version: "1.95.0"
+
+  dxf-crosscheck:
+    name: dxf-crosscheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ezdxf==1.4.4
+      - run: python tools/gen-goldens.py --check

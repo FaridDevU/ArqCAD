@@ -1,0 +1,34 @@
+[package]
+name = "af-api"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+# `cdylib` supports wasm packaging; `rlib` supports native workspace consumers.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# wasm-bindgen bindings for the JavaScript boundary. Native builds omit this
+# feature; wasm adds a thin `ApiSession` wrapper with JSON and typed arrays.
+wasm = ["dep:wasm-bindgen"]
+
+[dependencies]
+af-math = { path = "../af-math" }
+# Reuse af-geom curve flattening for command previews.
+af-geom = { path = "../af-geom" }
+af-model = { path = "../af-model" }
+af-cmd = { path = "../af-cmd" }
+af-select = { path = "../af-select" }
+af-render = { path = "../af-render" }
+af-io-native = { path = "../af-io-native" }
+af-io-dxf = { path = "../af-io-dxf" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+wasm-bindgen = { workspace = true, optional = true }
+
+# UUID v4 needs a JavaScript randomness source on `wasm32-unknown-unknown`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { version = "1", features = ["js"] }

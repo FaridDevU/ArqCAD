@@ -1,0 +1,22 @@
+[package]
+name = "af-cmd"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# af-geom supplies construction and editing geometry; commands do not reimplement it.
+af-geom = { path = "../af-geom" }
+af-math = { path = "../af-math" }
+af-model = { path = "../af-model" }
+# Command arguments use JSON for scripting and headless entry points.
+# `float_roundtrip` preserves exact number round trips; parsing stays dependency-free.
+serde_json = { workspace = true }
+
+[dev-dependencies]
+# Integration tests repeat runtime dependencies because each test is a separate crate.
+af-geom = { path = "../af-geom" }
+af-math = { path = "../af-math" }
+af-model = { path = "../af-model" }
+serde_json = { workspace = true }

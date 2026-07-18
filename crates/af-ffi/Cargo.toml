@@ -1,0 +1,14 @@
+[package]
+name = "af-ffi"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+af-api = { path = "../af-api" }
+af-model = { path = "../af-model" }
+serde_json = { workspace = true }

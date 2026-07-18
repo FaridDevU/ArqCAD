@@ -1,0 +1,725 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ArcForge.Desktop">
+
+  <Style Selector="Control">
+    <Setter Property="Transitions">
+      <Transitions />
+    </Setter>
+  </Style>
+
+  <!-- ================= Base typography ================= -->
+  <Style Selector="TextBlock">
+    <Setter Property="FontFamily" Value="Segoe UI" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+  </Style>
+
+  <!-- ================= Base Button + interaction states ================= -->
+  <Style Selector="Button">
+    <Setter Property="FontFamily" Value="Segoe UI" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="5,2" />
+  </Style>
+  <Style Selector="Button:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+  <Style Selector="Button:focus-visible">
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button:disabled">
+    <Setter Property="Opacity" Value="0.46" />
+  </Style>
+
+  <!-- ================= The single active family ================= -->
+  <!-- One rule owns the active colour. Every other *.active only tweaks geometry/type. -->
+  <Style Selector="Button.active">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Active.Fg}" />
+  </Style>
+  <!-- Hover must NOT extinguish the active look. -->
+  <Style Selector="Button.active:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Hover}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+  </Style>
+  <Style Selector="Button.active:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Hover}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+  </Style>
+
+  <!-- ================= Primary (modal confirm) ================= -->
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{StaticResource Brush.Accent}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent.Bright}" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Active.Fg}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.primary:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Accent.Bright}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent.Bright}" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Surface.0}" />
+  </Style>
+  <Style Selector="Button.primary:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Border}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent.Bright}" />
+  </Style>
+
+  <!-- ================= Modal footer secondary buttons (Cancel / Apply) ================= -->
+  <!-- Secondary chrome uses fill and border with centered labels next to the primary action. -->
+  <Style Selector="Button.modalSecondary">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Foreground" Value="#E4ECF6" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.modalSecondary:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.modalSecondary:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+
+  <!-- ================= Dialog tab strip ================= -->
+  <!-- Connected tab look built per-button: inactive tabs carry the shared baseline (bottom
+       border) and the active tab flips to fill + top/side borders with an open bottom, so the
+       selection reads as attached to the content below. -->
+  <Style Selector="Button.dialogTab">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="CornerRadius" Value="3,3,0,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.dialogTab:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.dialogTab.active">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.1}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="BorderThickness" Value="1,1,1,0" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Active.Fg}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.dialogTab.active:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.1}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+  </Style>
+
+  <!-- ================= Surface action rows (menus, search, palettes) ================= -->
+  <!-- Rows fill the panel width (Stretch) so every item is a uniform full-width menu row
+       instead of a box that hugs its text. -->
+  <Style Selector="Button.surfaceAction">
+    <Setter Property="MinHeight" Value="42" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.1}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="CornerRadius" Value="3" />
+  </Style>
+  <Style Selector="Button.surfaceAction:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.surfaceAction:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+  <!-- The two-class selector is declared after Button.surfaceAction so the active/
+       selection fill actually paints on menu and search-result rows (keyboard highlight). -->
+  <Style Selector="Button.surfaceAction.active">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Active.Fg}" />
+  </Style>
+  <Style Selector="Button.surfaceAction.active:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Hover}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+  </Style>
+  <!-- Non-clickable rows: section headers and informative strips inside surfaces. -->
+  <Style Selector="Border.surfaceHeader">
+    <Setter Property="Padding" Value="12,7,12,3" />
+  </Style>
+  <Style Selector="Border.surfaceSeparator">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="6,4" />
+    <Setter Property="Background" Value="{StaticResource Brush.Border.0}" />
+  </Style>
+
+  <!-- Collapsible aux-palette section header (code-built). -->
+  <Style Selector="Button.auxSection">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.auxSection:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.auxSection:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+
+  <!-- ================= Top chips (product / document selectors) ================= -->
+  <Style Selector="Button.topChip">
+    <Setter Property="Height" Value="35" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.0}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="11,0" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.topChip:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.topChip:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+  <!-- The chip stays lit while its dropdown is open (declared after the chip fill). -->
+  <Style Selector="Button.topChip.active">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+  </Style>
+
+  <!-- Small "＋"/add tiles in the title bar, workspace tab strip and layout strip. -->
+  <Style Selector="Button.addTile">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+    <Setter Property="CornerRadius" Value="3" />
+  </Style>
+  <Style Selector="Button.addTile:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.addTile:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+
+  <!-- Transparent title-bar ghost buttons (menu icon, profile). -->
+  <Style Selector="Button.titleGhost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <!-- Title-bar ghost triggers (app menu, profile) light up while their panel is open. -->
+  <Style Selector="Button.titleGhost.active">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Bg}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+  </Style>
+  <!-- Utility triggers (cloud, notifications) keep their pressed look while open. -->
+  <Style Selector="Button.utility.active">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+  </Style>
+
+  <!-- ================= Window chrome buttons ================= -->
+  <Style Selector="Button.utility">
+    <Setter Property="Width" Value="42" />
+    <Setter Property="Height" Value="42" />
+    <Setter Property="Padding" Value="8" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+  </Style>
+  <Style Selector="Button.window">
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="50" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="FontSize" Value="17" />
+  </Style>
+  <Style Selector="Button.window.close:pointerover">
+    <Setter Property="Background" Value="#B84252" />
+    <Setter Property="BorderBrush" Value="#B84252" />
+  </Style>
+
+  <!-- ================= Ribbon tabs ================= -->
+  <Style Selector="Button.ribbonTab">
+    <Setter Property="Height" Value="47" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+    <Setter Property="CornerRadius" Value="2,2,0,0" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1,1,1,2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <!-- Delta only: colour comes from Button.active. -->
+  <Style Selector="Button.ribbonTab.active">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- ================= Ribbon tiles ================= -->
+  <Style Selector="Button.ribbonPrimary">
+    <Setter Property="Height" Value="111" />
+    <Setter Property="Padding" Value="4,17,4,2" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+  </Style>
+  <Style Selector="Button.ribbonMini">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="MinWidth" Value="30" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="Button.ribbonTile">
+    <Setter Property="Height" Value="111" />
+    <Setter Property="Margin" Value="5,0" />
+    <Setter Property="Padding" Value="4,17,4,2" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+  </Style>
+  <Style Selector="Border.ribbonGroup">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+  </Style>
+  <!-- Trailing group of a contextual tab: drop the right separator so it does not float as a
+       loose vertical line in the empty band after the ribbon content. -->
+  <Style Selector="Border.ribbonGroup.ribbonGroupLast">
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- Ribbon overflow ("More") tiles. -->
+  <Style Selector="Button.ribbonOverflow">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="CornerRadius" Value="3" />
+  </Style>
+  <Style Selector="Button.ribbonOverflow:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.ribbonOverflow:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+
+  <!-- ================= Group labels ================= -->
+  <Style Selector="TextBlock.groupLabel">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.groupLabel">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+    <!-- Stretch so the centred content actually centres under the whole group instead of
+         collapsing to a left-hugging, content-sized button. -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="3" />
+  </Style>
+
+  <!-- ================= Tool rail ================= -->
+  <Style Selector="Button.rail">
+    <Setter Property="Width" Value="43" />
+    <Setter Property="Height" Value="42" />
+    <Setter Property="Padding" Value="9" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Opacity" Value="0.8" />
+  </Style>
+  <!-- Delta only: colour comes from Button.active. -->
+  <Style Selector="Button.rail.active">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <!-- The rail glyph accent follows the active state instead of being pinned bright. -->
+  <Style Selector="Button.rail.active local|CadToolIcon">
+    <Setter Property="Accent" Value="{StaticResource Color.Accent.Bright}" />
+  </Style>
+
+  <!-- ================= Document tabs ================= -->
+  <!-- Shell wraps the name + close as one unit; the whole tab flips to the active look. -->
+  <Style Selector="Border.docTabShell">
+    <Setter Property="CornerRadius" Value="3,3,0,0" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.0}" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.docTabShell.active">
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Active.Border}" />
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Bg}" />
+  </Style>
+  <Style Selector="Button.docTab">
+    <Setter Property="Height" Value="37" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="15" />
+  </Style>
+  <!-- Delta only: the active fill comes from the shell; the label just goes bold. -->
+  <Style Selector="Button.docTab.active">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Active.Fg}" />
+  </Style>
+  <!-- The close hit-area stays transparent so the shell colour reads through; hover only. -->
+  <Style Selector="Button.docTabClose">
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+  </Style>
+
+  <!-- ================= Layout tabs (Model / Layout) ================= -->
+  <Style Selector="Button.layoutTab">
+    <Setter Property="Height" Value="39" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <!-- Delta only: colour comes from Button.active. -->
+  <Style Selector="Button.layoutTab.active">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- ================= View chips ================= -->
+  <Style Selector="Button.viewChip">
+    <Setter Property="Height" Value="27" />
+    <Setter Property="Padding" Value="9,0" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.0}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="#D8E0EB" />
+  </Style>
+  <Style Selector="Button.viewChip:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.viewChip:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+
+  <!-- ================= ViewCube / compass hit-areas ================= -->
+  <!-- Invisible clickable faces that light up on hover/press for honest feedback. -->
+  <Style Selector="Button.cubeFace">
+    <Setter Property="Background" Value="#01000000" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="Button.cubeFace:pointerover">
+    <Setter Property="Background" Value="#334D667A" />
+  </Style>
+  <Style Selector="Button.cubeFace:pressed">
+    <Setter Property="Background" Value="#555A7185" />
+  </Style>
+
+  <!-- ================= Navigation / palette tool buttons ================= -->
+  <Style Selector="Button.navTool">
+    <Setter Property="Width" Value="35" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="7" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="Button.paletteTool">
+    <Setter Property="Width" Value="31" />
+    <Setter Property="Height" Value="31" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+
+  <!-- ================= Property panel sections/rows ================= -->
+  <Style Selector="Border.propertySection">
+    <Setter Property="Height" Value="27" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="BorderThickness" Value="0,1,0,1" />
+    <Setter Property="Padding" Value="9,0" />
+  </Style>
+  <Style Selector="Button.propertySection">
+    <Setter Property="Height" Value="27" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="BorderThickness" Value="0,1,0,1" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="9,0" />
+    <!-- The band spans the full palette width with the chevron on the right edge. -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.propertySection:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+  <Style Selector="Button.propertySection:pressed">
+    <Setter Property="Background" Value="{StaticResource Brush.Pressed.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+  <!-- The header chevron is driven by the section's real state, never a static glyph.
+       Collapsed → ChevronUp; expanded (.active) → ChevronDown. -->
+  <Style Selector="Button.propertySection local|CadToolIcon">
+    <Setter Property="Tool" Value="ChevronUp" />
+    <Setter Property="Accent" Value="#8493A6" />
+  </Style>
+  <Style Selector="Button.propertySection.active local|CadToolIcon">
+    <Setter Property="Tool" Value="ChevronDown" />
+    <Setter Property="Accent" Value="#CFE0F2" />
+  </Style>
+  <!-- Rows carry a bottom gridline so each property reads as a delimited band
+       instead of a label floating on a flat panel that matches the row fill. -->
+  <Style Selector="Border.propertyRow">
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Background" Value="{StaticResource Brush.Row.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="15,2" />
+  </Style>
+  <!-- The "Tabular view" property mode packs rows into a denser table rhythm. -->
+  <Style Selector="Border.propertyRow.compact">
+    <Setter Property="Height" Value="23" />
+    <Setter Property="Padding" Value="15,0" />
+  </Style>
+  <Style Selector="Border.propertyRow ComboBox">
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="MaxHeight" Value="26" />
+    <Setter Property="Padding" Value="6,1" />
+    <!-- Value editors fill the value column instead of shrinking to content. -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Border.propertyValue">
+    <Setter Property="Height" Value="21" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.0}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="7,0" />
+  </Style>
+
+  <!-- ================= Layer rows (data-driven selection) ================= -->
+  <!-- Rows live in Auto grid rows so hiding one collapses its band; MinHeight keeps
+       the visible density stable. -->
+  <Style Selector="Grid.layerRow">
+    <Setter Property="Background" Value="{StaticResource Brush.Row.Bg}" />
+    <Setter Property="MinHeight" Value="38" />
+  </Style>
+  <Style Selector="Grid.layerRow.selected">
+    <Setter Property="Background" Value="{StaticResource Brush.Row.Selected}" />
+  </Style>
+
+  <!-- Visibility/lock toggles read their state from the icon accent (bright = on,
+       muted = off) instead of an identical glyph. The plate stays flat so the icon is the signal. -->
+  <Style Selector="Button.layerToggle">
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinWidth" Value="30" />
+    <Setter Property="Padding" Value="5" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.layerToggle local|CadToolIcon">
+    <Setter Property="Accent" Value="#586B80" />
+  </Style>
+  <Style Selector="Button.layerToggle.active local|CadToolIcon">
+    <Setter Property="Accent" Value="#EAF2FB" />
+  </Style>
+  <Style Selector="Button.layerToggle.active">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.layerToggle.active:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Hover.Bg}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Hover.Border}" />
+  </Style>
+
+  <!-- Palette chrome (pin / auto-hide / close) uses icon buttons in palette title bars. -->
+  <Style Selector="Button.paletteChrome">
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+
+  <!-- ================= Text inputs ================= -->
+  <Style Selector="TextBox">
+    <Setter Property="FontFamily" Value="Segoe UI" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.1}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="11,4" />
+  </Style>
+  <Style Selector="TextBox.propertyEditor">
+    <Setter Property="Height" Value="26" />
+    <!-- Pin the box to 26 so the Fluent MinHeight (32) cannot overflow the 30 px row. -->
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="MaxHeight" Value="26" />
+    <Setter Property="Padding" Value="7,1" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <!-- Focus visible with the accent, keeping the themed surface (not stock #0078D7/black). -->
+  <Style Selector="TextBox:focus">
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.1}" />
+  </Style>
+  <Style Selector="TextBox:focus-within">
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.1}" />
+  </Style>
+  <Style Selector="TextBox.invalid">
+    <Setter Property="BorderBrush" Value="#F05D6A" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+
+  <!-- Search fields wrap a borderless TextBox: surface the focus on the frame. -->
+  <Style Selector="Border.searchField">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.0}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.0}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+  </Style>
+  <Style Selector="Border.searchField:focus-within">
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+  <!-- For a borderless TextBox that is a sibling (not a child) of the frame, code toggles this. -->
+  <Style Selector="Border.searchField.focused">
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+  </Style>
+
+  <!-- ================= Combo boxes ================= -->
+  <Style Selector="ComboBox">
+    <Setter Property="FontFamily" Value="Segoe UI" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.1}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="8,2" />
+  </Style>
+  <Style Selector="ComboBox:focus">
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="ComboBox:focus-within">
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="CheckBox:focus-visible">
+    <Setter Property="Foreground" Value="{StaticResource Brush.Accent.Bright}" />
+  </Style>
+
+  <!-- ================= Status-bar drafting toggles ================= -->
+  <Style Selector="Button.status">
+    <Setter Property="Width" Value="38" />
+    <Setter Property="Height" Value="39" />
+    <Setter Property="Padding" Value="9" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Foreground" Value="#9FADBE" />
+  </Style>
+  <!-- Delta only: bg/border come from Button.active; the glyph goes bright. -->
+  <Style Selector="Button.status.active">
+    <Setter Property="Foreground" Value="{StaticResource Brush.Accent.Bright}" />
+  </Style>
+  <!-- The glyph accent follows the real toggle state instead of being pinned blue.
+       OFF stays neutral grey (both stroke + detail); ON lights the whole glyph in accent. -->
+  <Style Selector="Button.status local|CadToolIcon">
+    <Setter Property="Accent" Value="#8A97A6" />
+    <Setter Property="Highlight" Value="#72808F" />
+  </Style>
+  <Style Selector="Button.status.active local|CadToolIcon">
+    <Setter Property="Accent" Value="{StaticResource Color.Accent.Bright}" />
+    <Setter Property="Highlight" Value="{StaticResource Color.Accent.Bright}" />
+  </Style>
+
+  <!-- ================= Resize grips ================= -->
+  <!-- A bare Thumb in Avalonia 11 never paints its Background, so the resize band was
+       invisible. A minimal template renders the band plus a centred grip line so the
+       palette/panel edge advertises that it is draggable. -->
+  <Style Selector="Thumb.resizeGrip">
+    <Setter Property="Background" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}">
+          <Rectangle Width="1" Height="26" Fill="#4C7098" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Thumb.resizeGrip:pointerover">
+    <Setter Property="Background" Value="{StaticResource Brush.Active.Border}" />
+  </Style>
+
+  <!-- ================= Scrollbars ================= -->
+  <!-- Fluent's default thumb is a light gray (#858585) that clashes with the night-blue shell.
+       The resource overrides in Palette.axaml recolour every state; these template-reaching
+       styles guarantee the resting/hover thumb follows the palette even if the theme wiring
+       changes, without extinguishing the pressed state. -->
+  <Style Selector="ScrollBar">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ScrollBar /template/ Thumb">
+    <Setter Property="Background" Value="{StaticResource Brush.Scroll.Thumb}" />
+  </Style>
+  <Style Selector="ScrollBar:pointerover /template/ Thumb">
+    <Setter Property="Background" Value="{StaticResource Brush.Scroll.Thumb.Hover}" />
+  </Style>
+
+  <!-- ================= Rich tooltips ================= -->
+  <!-- Dark themed chrome so the code-built title+description+shortcut tooltips read as one
+       system instead of Fluent's stock light popup. -->
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.0}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="11,8" />
+    <Setter Property="MaxWidth" Value="300" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+  </Style>
+  <!-- Keyboard-shortcut chip inside a rich tooltip. -->
+  <Style Selector="Border.kbdHint">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface.2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.1}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="6,1" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+</Styles>

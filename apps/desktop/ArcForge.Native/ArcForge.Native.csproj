@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsRidAgnostic>false</IsRidAgnostic>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' and '$(ArcCadNativeDirectory)' != ''">
+    <Content Include="$(ArcCadNativeDirectory)\af_ffi.dll"
+             Link="af_ffi.dll"
+             TargetPath="af_ffi.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(ArcCadNativeDirectory)\libunwind.dll"
+             Link="libunwind.dll"
+             TargetPath="libunwind.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="ValidateArcCadNativeAssets"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <Error Condition="'$(ArcCadNativeDirectory)' == ''"
+           Text="ArcCadNativeDirectory is required for win-x64 and must contain af_ffi.dll and libunwind.dll." />
+    <Error Condition="!Exists('$(ArcCadNativeDirectory)\af_ffi.dll')"
+           Text="af_ffi.dll was not found in ArcCadNativeDirectory: $(ArcCadNativeDirectory)" />
+    <Error Condition="!Exists('$(ArcCadNativeDirectory)\libunwind.dll')"
+           Text="libunwind.dll was not found in ArcCadNativeDirectory: $(ArcCadNativeDirectory)" />
+  </Target>
+</Project>

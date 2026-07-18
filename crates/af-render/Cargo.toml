@@ -1,0 +1,17 @@
+[package]
+name = "af-render"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+af-math = { path = "../af-math" }
+af-geom = { path = "../af-geom" }
+af-model = { path = "../af-model" }
+# Insertion-ordered map used to batch primitives while preserving first-seen
+# drawing order. This derived index is never serialized.
+indexmap = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

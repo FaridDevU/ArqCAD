@@ -1,0 +1,19 @@
+; ArcCAD .lin fixture with original patterns created for these tests.
+; It does not copy acad.lin, zwcad.lin, or any third-party pattern library.
+
+*DASHED2,ArcCAD dashed __ __ __ __ __ __ __
+A,0.6,-0.3
+
+*CENTER2,ArcForge center ____ _ ____ _ ____ _
+A,1.5,-0.3,0.3,-0.3
+
+*DOTDASH2,ArcForge dot dash . _ . _ . _ . _
+A,0.0,-0.2,0.6,-0.2
+
+; GASLINE2 uses embedded text, which is unsupported and skipped with a warning.
+*GASLINE2,ArcForge gas line --GAS----GAS----
+A,0.5,-0.2,["GAS",STANDARD,S=.1,R=0.0,X=-0.1,Y=-.05],-0.25
+
+; Deliberate case-insensitive DASHED2 redefinition tests last-definition wins.
+*DASHED2,ArcCAD dashed, redefined for the fixture
+A,0.8,-0.4

@@ -1,0 +1,19 @@
+[package]
+name = "af-io-native"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+af-model = { path = "../af-model" }
+serde = { workspace = true }
+# Persistence must use the same float parser as af-model so arbitrary f64
+# coordinates remain identical across roundtrips and undo snapshots.
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+zip = { workspace = true }
+
+[dev-dependencies]
+af-math = { path = "../af-math" }
+proptest = { workspace = true }

@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/af-math",
+    "crates/af-geom",
+    "crates/af-model",
+    "crates/af-select",
+    "crates/af-render",
+    "crates/af-cmd",
+    "crates/af-io-native",
+    "crates/af-io-dxf",
+    "crates/af-api",
+    "crates/af-ffi",
+    "crates/af-bench",
+]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+version = "0.1.0"
+rust-version = "1.95"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+# The default parser can differ by one ULP when reparsing f64 values. Exact
+# roundtrips keep persisted drawings and undo snapshots byte-identical.
+serde_json = { version = "1", features = ["float_roundtrip"] }
+proptest = "1"
+thiserror = "2"
+# Spatial R*-tree (MIT/Apache) for af-select. Derived index, never serialized.
+rstar = "0.13"
+# Insertion-ordered set; af-select uses it for stable selection ordering.
+indexmap = "2"
+# ZIP container for the `.arcf` format. MIT. Without default features:
+# encryption (aes-crypto) and extra compressors (bzip2/zstd/lzma) are excluded. Only `deflate`
+# (the pure-Rust miniz_oxide backend, with no C or GPL code) compresses document.json.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Micro-benchmarking (dev-only). Without default features: `plotters` and `rayon` are excluded;
+# they do not help the headless benchmark and inflate the dependency tree (license hygiene).
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+# WASM boundary for af-api (the `wasm` feature). Pinned to Cargo.lock. The native
+# crate builds WITHOUT these dependencies: all af-api
+# logic is headless-testable, and wasm-bindgen/js-sys only enter with `--features wasm`.
+wasm-bindgen = "0.2.126"
+js-sys = "0.3.103"

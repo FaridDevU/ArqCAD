@@ -1,0 +1,22 @@
+[package]
+name = "af-select"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+af-math = { path = "../af-math" }
+af-geom = { path = "../af-geom" }
+af-model = { path = "../af-model" }
+rstar = { workspace = true }
+indexmap = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+# Deterministic `pick_10k` and `bulk_build_100k` benchmarks.
+[[bench]]
+name = "select_bench"
+harness = false

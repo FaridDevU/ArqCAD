@@ -1,0 +1,2 @@
+# Golden DXF fixtures are exact byte artifacts: never convert line endings (CRLF).
+*.dxf -text whitespace=cr-at-eol

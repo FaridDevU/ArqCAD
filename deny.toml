@@ -1,0 +1,17 @@
+# cargo-deny license allowlist for the ArqCAD core.
+# Only permissive / weak-copyleft-excluded licenses are allowed. MPL-2.0 and
+# any strong copyleft (GPL/LGPL/AGPL) are deliberately NOT listed.
+# Run in CI via the `deps-guard` job; see .github/workflows/ci.yml.
+
+[licenses]
+# Confidence threshold left at the cargo-deny default (0.8).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "OFL-1.1",
+    "Unicode-3.0",
+    "ISC",
+]

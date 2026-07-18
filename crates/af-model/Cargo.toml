@@ -1,0 +1,25 @@
+[package]
+name = "af-model"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+af-math = { path = "../af-math" }
+af-geom = { path = "../af-geom" }
+serde = { workspace = true }
+smallvec = "1"
+indexmap = { version = "2", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+# `float_roundtrip` correctly rounds parsed f64 values, preserving bit-exact
+# serde round trips for arbitrary coordinates. Persistence must use the same mode.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+proptest = { workspace = true }
+
+# Cargo does not auto-discover this nested conformance-suite root.
+[[test]]
+name = "conformance"
+path = "tests/conformance/mod.rs"

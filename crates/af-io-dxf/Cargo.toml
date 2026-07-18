@@ -1,0 +1,18 @@
+[package]
+name = "af-io-dxf"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+af-math = { path = "../af-math" }
+af-model = { path = "../af-model" }
+
+[dev-dependencies]
+# Integration tests are separate crates, so repeat dependencies used to build
+# fixture sessions and entity records.
+af-math = { path = "../af-math" }
+af-model = { path = "../af-model" }
+# Property tests cover arbitrary and mutated import input without panics.
+proptest = { workspace = true }

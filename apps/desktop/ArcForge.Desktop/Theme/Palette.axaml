@@ -1,0 +1,89 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Single source of truth for the restrained ArcCAD dark theme. -->
+
+  <!-- Active state family (the single enabled look). -->
+  <SolidColorBrush x:Key="Brush.Active.Bg" Color="#2A3A47" />
+  <SolidColorBrush x:Key="Brush.Active.Border" Color="#647F95" />
+  <SolidColorBrush x:Key="Brush.Active.Fg" Color="#EDF1F4" />
+  <SolidColorBrush x:Key="Brush.Active.Hover" Color="#324654" />
+
+  <!-- Accent. -->
+  <Color x:Key="Color.Accent">#607F98</Color>
+  <Color x:Key="Color.Accent.Bright">#7896AD</Color>
+  <SolidColorBrush x:Key="Brush.Accent" Color="#607F98" />
+  <SolidColorBrush x:Key="Brush.Accent.Bright" Color="#7896AD" />
+
+  <!-- One cyan accent token serves every docked-palette title bar (Layers, Properties, and
+       the four auxiliary palettes) so the accent stays coherent instead of one going purple. -->
+  <SolidColorBrush x:Key="Brush.Palette.Accent" Color="#71899C" />
+
+  <!-- Surfaces. -->
+  <SolidColorBrush x:Key="Brush.Surface.0" Color="#11171D" />
+  <SolidColorBrush x:Key="Brush.Surface.1" Color="#171E25" />
+  <SolidColorBrush x:Key="Brush.Surface.2" Color="#202831" />
+
+  <!-- Borders. -->
+  <SolidColorBrush x:Key="Brush.Border.0" Color="#2D3741" />
+  <SolidColorBrush x:Key="Brush.Border.1" Color="#3A4651" />
+
+  <!-- Text. -->
+  <SolidColorBrush x:Key="Brush.Text.Primary" Color="#E2E7EB" />
+  <SolidColorBrush x:Key="Brush.Text.Secondary" Color="#B2BBC4" />
+  <SolidColorBrush x:Key="Brush.Text.Muted" Color="#818C96" />
+
+  <!-- Rows. -->
+  <SolidColorBrush x:Key="Brush.Row.Bg" Color="#171E25" />
+  <SolidColorBrush x:Key="Brush.Row.Selected" Color="#25333E" />
+
+  <!-- Dockable palette chrome shared by Layers, Properties, and auxiliary palettes.
+       One source of truth so sibling palettes stop drifting to near-duplicate hexes. -->
+  <SolidColorBrush x:Key="Brush.Palette.Bg" Color="#171E25" />
+  <SolidColorBrush x:Key="Brush.Palette.Border" Color="#3A4651" />
+  <SolidColorBrush x:Key="Brush.Palette.HeaderBg" Color="#202831" />
+  <SolidColorBrush x:Key="Brush.Palette.HeaderBorder" Color="#343F49" />
+  <SolidColorBrush x:Key="Brush.Palette.FooterBg" Color="#151B21" />
+  <SolidColorBrush x:Key="Brush.Palette.FooterText" Color="#8D98A2" />
+
+  <!-- Hover/pressed neutrals shared by the base Button family. -->
+  <SolidColorBrush x:Key="Brush.Hover.Bg" Color="#232C35" />
+  <SolidColorBrush x:Key="Brush.Hover.Border" Color="#45515D" />
+  <SolidColorBrush x:Key="Brush.Pressed.Bg" Color="#293A47" />
+
+  <!-- Scrollbars follow the night-blue palette instead of Fluent's default gray (#858585).
+       The Brush.Scroll.* tokens drive the app-level Thumb style; the ScrollBar* keys override the
+       Fluent theme brushes (consumed via DynamicResource) so every state stays themed. -->
+  <SolidColorBrush x:Key="Brush.Scroll.Thumb" Color="#46535F" />
+  <SolidColorBrush x:Key="Brush.Scroll.Thumb.Hover" Color="#5B6874" />
+  <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#46535F" />
+  <Color x:Key="ScrollBarThumbBackgroundColor">#46535F</Color>
+  <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#5B6874" />
+  <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#6A7885" />
+  <SolidColorBrush x:Key="ScrollBarThumbFillDisabled" Color="#29323B" />
+  <SolidColorBrush x:Key="ScrollBarTrackFill" Color="Transparent" />
+  <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="#1B2229" />
+  <SolidColorBrush x:Key="ScrollBarBackground" Color="Transparent" />
+  <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="#1B2229" />
+
+  <!-- Override Fluent TextBox/ComboBox focus + hover so the theme wins over stock #0078D7/black. -->
+  <SolidColorBrush x:Key="TextControlBackground" Color="#171E25" />
+  <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#171E25" />
+  <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#171E25" />
+  <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#3A4651" />
+  <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#607F98" />
+  <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#E2E7EB" />
+  <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#607F98" />
+
+  <!-- Theme the Fluent CheckBox checked state to the restrained application accent. -->
+  <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#607F98" />
+  <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#7896AD" />
+  <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#324654" />
+  <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeChecked" Color="#607F98" />
+  <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" Color="#7896AD" />
+  <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" Color="#324654" />
+  <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#EDF1F4" />
+  <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#EDF1F4" />
+  <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="#EDF1F4" />
+</ResourceDictionary>

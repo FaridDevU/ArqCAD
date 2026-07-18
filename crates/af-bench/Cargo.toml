@@ -1,0 +1,25 @@
+[package]
+name = "af-bench"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+af-math = { path = "../af-math" }
+af-model = { path = "../af-model" }
+af-select = { path = "../af-select" }
+af-io-native = { path = "../af-io-native" }
+af-io-dxf = { path = "../af-io-dxf" }
+
+[dev-dependencies]
+criterion = { workspace = true }
+# Used only by the `gen::synth_doc` byte-for-byte determinism test.
+serde_json = { workspace = true }
+
+# Baseline for iteration, hit tests, transactions, undo, persistence, and DXF.
+# Small Criterion samples keep the complete suite practical.
+[[bench]]
+name = "baseline"
+harness = false

@@ -1,0 +1,577 @@
+<Window
+    x:Class="ArcForge.Desktop.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ArcForge.Desktop"
+    xmlns:media="using:Avalonia.Media"
+    Title="ArcCAD Alpha — Sin título.arcf"
+    Width="1672"
+    Height="941"
+    MinWidth="1280"
+    MinHeight="720"
+    WindowState="Maximized"
+    SystemDecorations="None"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaChromeHints="NoChrome"
+    ExtendClientAreaTitleBarHeightHint="50"
+    WindowStartupLocation="CenterScreen"
+    media:RenderOptions.TextRenderingMode="Antialias"
+    Background="#0D1116">
+
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://ArcForge.Desktop/Theme/Palette.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Window.Resources>
+
+  <Window.Styles>
+    <StyleInclude Source="avares://ArcForge.Desktop/Theme/Styles.axaml" />
+  </Window.Styles>
+
+  <Grid x:Name="RootOverlayGrid" PointerPressed="OnRootPointerPressed">
+  <Border x:Name="ApplicationChrome" CornerRadius="4" BorderBrush="#303943" BorderThickness="1" ClipToBounds="True">
+    <Grid RowDefinitions="50,48,150,3,*,6,49,6" Background="#11161C">
+      <!-- Premium title bar, measured to the 1672 px reference. -->
+      <Border x:Name="TitleBar" Grid.Row="0" Background="#11161C">
+        <Grid x:Name="TitleLayout" ColumnDefinitions="465,*,352">
+          <Canvas Grid.Column="0" Height="50">
+            <Button x:Name="ApplicationMenuButton" Classes="titleGhost" Canvas.Left="16" Canvas.Top="4" Width="43" Height="43" Padding="3" ToolTip.Tip="Menú de ArcCAD" AutomationProperties.Name="Menú de ArcCAD" Tag="shell.application-menu" Click="OnUiActionClick">
+              <Border Width="35" Height="35" CornerRadius="3" Background="#1A222A" BorderBrush="#52697C" BorderThickness="1" ClipToBounds="True">
+                <Viewbox Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center"><Canvas Width="30" Height="30"><Path Data="M 4,25 L 14.2,4 L 24.5,25 M 8.2,18.5 L 20.3,18.5" Stroke="#D6DEE5" StrokeThickness="1.7" /><Path Data="M 3,26 Q 14,21.8 26,25.8" Stroke="#6F8FA8" StrokeThickness="1.5" /><Path Data="M 14,3 Q 26,4 27,16" Stroke="#697681" StrokeThickness="1" /><Ellipse Canvas.Left="12.6" Canvas.Top="1.7" Width="3.2" Height="3.2" Fill="#7896AD" /></Canvas></Viewbox>
+              </Border>
+            </Button>
+            <Button x:Name="ProductMenuButton" Canvas.Left="66" Canvas.Top="8" Width="183" Classes="topChip" AutomationProperties.Name="Selector de producto" Tag="shell.product-menu" Click="OnUiActionClick">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="ArcCAD Alpha" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <local:CadToolIcon Grid.Column="1" Tool="ChevronDown" Width="13" Height="13" Accent="#9DABBD" Margin="4,0,0,0" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Button x:Name="DocumentMenuButton" Canvas.Left="252" Canvas.Top="8" Width="165" Classes="topChip" AutomationProperties.Name="Lista de dibujos" Tag="shell.document-menu" Click="OnUiActionClick">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock x:Name="DocumentTitleText" Text="Sin título.arcf" FontSize="13" VerticalAlignment="Center" />
+                <local:CadToolIcon Grid.Column="1" Tool="ChevronDown" Width="13" Height="13" Accent="#9DABBD" Margin="4,0,0,0" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Button x:Name="NewDocumentButton" Classes="addTile" Canvas.Left="427" Canvas.Top="8" Width="38" Height="35" Padding="0" ToolTip.Tip="Nuevo dibujo" AutomationProperties.Name="Nuevo dibujo" Tag="shell.new-document" Click="OnUiActionClick"><local:CadToolIcon Tool="Plus" Width="16" Height="16" Accent="#C7D1DE" /></Button>
+          </Canvas>
+
+          <Grid Grid.Column="1" ColumnDefinitions="34,*" Height="35" MaxWidth="470" Margin="14,0" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#151C23">
+            <Border x:Name="GlobalSearchField" Grid.ColumnSpan="2" Classes="searchField" />
+            <local:CadToolIcon Tool="Zoom" Width="18" Height="18" Margin="10,0,4,0" VerticalAlignment="Center" />
+            <TextBox x:Name="GlobalSearchBox" Grid.Column="1" Height="33" Background="Transparent" BorderThickness="0" CornerRadius="0" Padding="2,5" Watermark="Buscar comandos" Tag="shell.search" AutomationProperties.Name="Buscar comandos" />
+          </Grid>
+
+          <Grid Grid.Column="2" ColumnDefinitions="28,42,42,42,14,42,*,40,1,40,1,40,12">
+            <Button x:Name="CloudButton" Grid.Column="1" Classes="utility" ToolTip.Tip="Nube" AutomationProperties.Name="ArcCloud" Tag="shell.cloud" Click="OnUiActionClick"><local:CadToolIcon Tool="Cloud" Width="21" Height="21" /></Button>
+            <Button x:Name="NotificationsButton" Grid.Column="2" Classes="utility" ToolTip.Tip="Notificaciones" AutomationProperties.Name="Notificaciones" Tag="shell.notifications" Click="OnUiActionClick"><local:CadToolIcon Tool="Bell" Width="21" Height="21" /></Button>
+            <Button x:Name="HelpButton" Grid.Column="3" Classes="utility" ToolTip.Tip="Ayuda" AutomationProperties.Name="Ayuda" Tag="shell.help" Click="OnUiActionClick"><local:CadToolIcon Tool="Help" Width="21" Height="21" Accent="#C7D1DE" /></Button>
+            <Button x:Name="ProfileButton" Classes="titleGhost" Grid.Column="5" Width="42" Height="42" Padding="0" ToolTip.Tip="Perfil" AutomationProperties.Name="Perfil" Tag="shell.profile" Click="OnUiActionClick">
+              <Border Width="26" Height="26" CornerRadius="3" Background="#24313B" BorderBrush="#52697C" BorderThickness="1" />
+            </Button>
+            <Button x:Name="MinimizeButton" Grid.Column="7" Classes="window" ToolTip.Tip="Minimizar" AutomationProperties.Name="Minimizar" Tag="shell.minimize"><local:CadToolIcon Tool="WindowMinimize" Width="16" Height="16" Accent="#C7D1DE" /></Button>
+            <Button x:Name="MaximizeButton" Grid.Column="9" Classes="window" ToolTip.Tip="Restaurar/Maximizar" AutomationProperties.Name="Restaurar o maximizar" Tag="shell.maximize"><local:CadToolIcon x:Name="MaximizeButtonIcon" Tool="WindowMaximize" Width="15" Height="15" Accent="#C7D1DE" /></Button>
+            <Button x:Name="CloseButton" Grid.Column="11" Classes="window close" ToolTip.Tip="Cerrar" AutomationProperties.Name="Cerrar ArcCAD" Tag="shell.close"><local:CadToolIcon Tool="Close" Width="16" Height="16" Accent="#C7D1DE" /></Button>
+          </Grid>
+        </Grid>
+      </Border>
+
+      <!-- Shared shell plate behind tabs and ribbon. -->
+      <Border Grid.Row="1" Grid.RowSpan="2" Margin="8,0" CornerRadius="4" Background="#171E25" BorderBrush="#343F49" BorderThickness="1" />
+
+      <Grid Grid.Row="1" Margin="16,0,16,0" ColumnDefinitions="Auto,*">
+        <StackPanel Orientation="Horizontal" Spacing="0">
+          <Button x:Name="HomeRibbonTab" Classes="ribbonTab active" Width="91" Content="Inicio" Tag="ribbon.tab.inicio" AutomationProperties.Name="Pestaña Inicio" Click="OnUiActionClick" />
+          <Button x:Name="AnnotateRibbonTab" Classes="ribbonTab" Width="86" Content="Anotar" Tag="ribbon.tab.anotar" AutomationProperties.Name="Pestaña Anotar" Click="OnUiActionClick" />
+          <Button x:Name="InsertRibbonTab" Classes="ribbonTab" Width="84" Content="Insertar" Tag="ribbon.tab.insertar" AutomationProperties.Name="Pestaña Insertar" Click="OnUiActionClick" />
+          <Button x:Name="ViewsRibbonTab" Classes="ribbonTab" Width="80" Content="Vistas" Tag="ribbon.tab.vistas" AutomationProperties.Name="Pestaña Vistas" Click="OnUiActionClick" />
+          <Button x:Name="ToolsRibbonTab" Classes="ribbonTab" Width="135" Content="Herramientas" Tag="ribbon.tab.herramientas" AutomationProperties.Name="Pestaña Herramientas" Click="OnUiActionClick" />
+          <Button x:Name="SmartRibbonTab" Classes="ribbonTab" Width="84" Content="Smart" Tag="ribbon.tab.smart" AutomationProperties.Name="Pestaña Smart" Click="OnUiActionClick" />
+          <Button x:Name="ManageRibbonTab" Classes="ribbonTab" Width="115" Content="Administra" Tag="ribbon.tab.administra" AutomationProperties.Name="Pestaña Administra" Click="OnUiActionClick" />
+          <Button x:Name="ExportRibbonTab" Classes="ribbonTab" Width="100" Content="Exportar" Tag="ribbon.tab.exportar" AutomationProperties.Name="Pestaña Exportar" Click="OnUiActionClick" />
+          <Button x:Name="OnlineRibbonTab" Classes="ribbonTab" Width="89" Content="En línea" Tag="ribbon.tab.en-linea" AutomationProperties.Name="Pestaña En línea" Click="OnUiActionClick" />
+          <Button x:Name="GeoServiceRibbonTab" Classes="ribbonTab" Width="112" Content="Geoservicio" Tag="ribbon.tab.geoservicio" AutomationProperties.Name="Pestaña Geoservicio" Click="OnUiActionClick" />
+        </StackPanel>
+        <!-- Quick Access Toolbar (QAT): persistent CAD-pattern shortcuts in the top area.
+             Compact enough to fit beside the tabs even at the 1280 px minimum width. -->
+        <StackPanel x:Name="QuickAccessToolbar" Grid.Column="1" Orientation="Horizontal" Spacing="0" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,1,0">
+          <Button x:Name="NewButton" Classes="navTool" Width="30" Padding="7" ToolTip.Tip="Nuevo (Ctrl+N)" AutomationProperties.Name="Nuevo documento" Tag="qat.new" Click="OnUiActionClick"><local:CadToolIcon Tool="New" Width="16" Height="16" /></Button>
+          <Button x:Name="OpenButton" Classes="navTool" Width="30" Padding="7" ToolTip.Tip="Abrir (Ctrl+O)" AutomationProperties.Name="Abrir documento .arcf" Tag="qat.open" Click="OnUiActionClick"><local:CadToolIcon Tool="Open" Width="16" Height="16" /></Button>
+          <Button x:Name="SaveButton" Classes="navTool" Width="30" Padding="7" ToolTip.Tip="Guardar (Ctrl+S)" AutomationProperties.Name="Guardar documento .arcf" Tag="qat.save" Click="OnUiActionClick"><local:CadToolIcon Tool="Save" Width="16" Height="16" /></Button>
+          <Button Classes="navTool" Width="30" Padding="7" ToolTip.Tip="Guardar como (Ctrl+Shift+S)" AutomationProperties.Name="Guardar como" Tag="qat.saveas" Click="OnUiActionClick"><local:CadToolIcon Tool="SaveAs" Width="16" Height="16" /></Button>
+          <Button Classes="navTool" Width="30" Padding="7" ToolTip.Tip="Imprimir (Ctrl+P)" AutomationProperties.Name="Imprimir" Tag="qat.print" Click="OnUiActionClick"><local:CadToolIcon Tool="Print" Width="16" Height="16" /></Button>
+          <Border Width="1" Height="22" Background="#22374F" Margin="5,0" />
+          <Button x:Name="UndoButton" Classes="navTool" Width="30" Padding="7" ToolTip.Tip="Deshacer (Ctrl+Z)" AutomationProperties.Name="Deshacer última acción" Tag="qat.undo" Click="OnUiActionClick"><local:CadToolIcon Tool="Undo" Width="16" Height="16" /></Button>
+          <Button x:Name="RedoButton" Classes="navTool" Width="30" Padding="7" ToolTip.Tip="Rehacer (Ctrl+Y)" AutomationProperties.Name="Rehacer última acción" Tag="qat.redo" Click="OnUiActionClick"><local:CadToolIcon Tool="Redo" Width="16" Height="16" /></Button>
+        </StackPanel>
+      </Grid>
+
+      <!-- 145 px ribbon body with group cuts matching the reference. -->
+      <Border Grid.Row="2" Margin="16,0,16,5" CornerRadius="3" Background="#1B2229" BorderBrush="#3A4651" BorderThickness="1" ClipToBounds="True">
+        <Grid>
+        <!-- Auto columns + fixed Width per group: a hidden group's column collapses to 0 so no
+             empty pixel band is reserved before the overflow card. -->
+        <Grid x:Name="RibbonInicioPanel" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*">
+          <Border Grid.Column="0" Width="342" Classes="ribbonGroup">
+            <Grid RowDefinitions="111,28,*">
+              <Grid ColumnDefinitions="72,78,72,64,56">
+                <Grid Grid.Column="0"><Button x:Name="LineButton" Classes="ribbonPrimary toolAction" Tag="home.draw.line" Click="OnUiActionClick" ToolTip.Tip="Línea (L)&#x0a;Dibuja segmentos de línea rectos" AutomationProperties.Name="Dibujar LINE"><StackPanel Spacing="2"><local:CadToolIcon Tool="Line" Width="43" Height="43" /><TextBlock Text="Línea" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button><Button Width="28" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Tag="home.draw.line-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de línea" AutomationProperties.Name="Variantes de línea"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid>
+                <Grid Grid.Column="1"><Button x:Name="HomePolylineButton" Classes="ribbonPrimary toolAction" Tag="home.draw.polyline" Click="OnUiActionClick" ToolTip.Tip="Polilínea (PL)&#x0a;Dibuja una polilínea de segmentos conectados" AutomationProperties.Name="Polilínea"><StackPanel Spacing="2"><local:CadToolIcon Tool="Polyline" Width="43" Height="43" /><TextBlock Text="Polilínea" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button><Button Width="28" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Tag="home.draw.polyline-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de polilínea" AutomationProperties.Name="Variantes de polilínea"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid>
+                <Grid Grid.Column="2"><Button x:Name="HomeCircleButton" Classes="ribbonPrimary toolAction" Tag="home.draw.circle" Click="OnUiActionClick" ToolTip.Tip="Círculo (C)&#x0a;Dibuja un círculo por centro y radio" AutomationProperties.Name="Círculo"><StackPanel Spacing="2"><local:CadToolIcon Tool="Circle" Width="43" Height="43" /><TextBlock Text="Círculo" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button><Button Width="28" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Tag="home.draw.circle-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de círculo" AutomationProperties.Name="Variantes de círculo"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid>
+                <Grid Grid.Column="3"><Button x:Name="HomeArcButton" Classes="ribbonPrimary toolAction" Tag="home.draw.arc" Click="OnUiActionClick" ToolTip.Tip="Arco (A)&#x0a;Dibuja un arco por tres puntos" AutomationProperties.Name="Arco"><StackPanel Spacing="2"><local:CadToolIcon Tool="Arc" Width="43" Height="43" /><TextBlock Text="Arco" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button><Button Width="28" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Tag="home.draw.arc-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de arco" AutomationProperties.Name="Variantes de arco"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid>
+                <Grid Grid.Column="4" RowDefinitions="32,32,32" ColumnDefinitions="28,28" Margin="0,17,0,0">
+                  <Button x:Name="HomeRectangleButton" Grid.Row="0" Classes="ribbonMini toolAction" Tag="home.draw.rectangle" Click="OnUiActionClick" ToolTip.Tip="Rectángulo (REC)" AutomationProperties.Name="Rectángulo"><local:CadToolIcon Tool="Rectangle" Width="19" Height="19" /></Button>
+                  <Button Grid.Row="0" Grid.Column="1" Classes="ribbonMini" Tag="home.draw.rectangle-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de rectángulo" AutomationProperties.Name="Variantes de rectángulo"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button>
+                  <Button x:Name="HomeArrayButton" Grid.Row="1" Classes="ribbonMini toolAction" Tag="home.draw.array" Click="OnUiActionClick" ToolTip.Tip="Matriz rectangular de la LINE seleccionada" AutomationProperties.Name="Matriz"><local:CadToolIcon Tool="Array" Width="19" Height="19" /></Button>
+                  <Button Grid.Row="1" Grid.Column="1" Classes="ribbonMini" Tag="home.draw.array-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de matriz" AutomationProperties.Name="Variantes de matriz"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button>
+                  <Button Grid.Row="2" Classes="ribbonMini toolAction" Tag="home.draw.boundary" Click="OnUiActionClick" ToolTip.Tip="Contorno" AutomationProperties.Name="Contorno"><local:CadToolIcon Tool="Boundary" Width="19" Height="19" /></Button>
+                  <Button Grid.Row="2" Grid.Column="1" Classes="ribbonMini" Tag="home.draw.boundary-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de contorno" AutomationProperties.Name="Variantes de contorno"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button>
+                </Grid>
+              </Grid>
+              <Button Grid.Row="1" Classes="groupLabel" Tag="home.draw.menu" Click="OnUiActionClick" AutomationProperties.Name="Menú Dibujar"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4"><TextBlock Text="Dibujar" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#9DABBD" VerticalAlignment="Center" /></StackPanel></Button>
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="1" Width="292" Classes="ribbonGroup">
+            <Grid RowDefinitions="111,28,*">
+              <Grid ColumnDefinitions="78,66,70,78">
+                <Button x:Name="HomeMoveButton" Grid.Column="0" Classes="ribbonPrimary toolAction" Tag="home.modify.move" Click="OnUiActionClick" ToolTip.Tip="Desplazar (M)&#x0a;Mueve los objetos seleccionados" AutomationProperties.Name="Desplazar"><StackPanel Spacing="3"><local:CadToolIcon Tool="Move" Width="43" Height="43" /><TextBlock Text="Desplazar" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button>
+                <Button x:Name="HomeRotateButton" Grid.Column="1" Classes="ribbonPrimary toolAction" Tag="home.modify.rotate" Click="OnUiActionClick" ToolTip.Tip="Girar (RO)&#x0a;Gira los objetos alrededor de un punto" AutomationProperties.Name="Girar"><StackPanel Spacing="3"><local:CadToolIcon Tool="Rotate" Width="43" Height="43" /><TextBlock Text="Girar" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button>
+                <Grid Grid.Column="2"><Button x:Name="HomeCopyButton" Classes="ribbonPrimary toolAction" Tag="home.modify.copy" Click="OnUiActionClick" ToolTip.Tip="Copiar (CO)&#x0a;Copia los objetos seleccionados" AutomationProperties.Name="Copiar"><StackPanel Spacing="3"><local:CadToolIcon Tool="Copy" Width="43" Height="43" /><TextBlock Text="Copiar" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button><Button Width="28" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Tag="home.modify.copy-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de copia" AutomationProperties.Name="Variantes de copia"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid>
+                <Button x:Name="HomeMirrorButton" Grid.Column="3" Classes="ribbonPrimary toolAction" Tag="home.modify.mirror" Click="OnUiActionClick" ToolTip.Tip="Simetría (MI)&#x0a;Refleja los objetos respecto a un eje" AutomationProperties.Name="Simetría"><StackPanel Spacing="3"><local:CadToolIcon Tool="Mirror" Width="43" Height="43" /><TextBlock Text="Simetría" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button>
+              </Grid>
+              <Button Grid.Row="1" Classes="groupLabel" Tag="home.modify.menu" Click="OnUiActionClick" AutomationProperties.Name="Menú Modificar"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4"><TextBlock Text="Modificar" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#9DABBD" VerticalAlignment="Center" /></StackPanel></Button>
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="2" Width="267" Classes="ribbonGroup">
+            <Grid RowDefinitions="111,28,*">
+              <Grid ColumnDefinitions="72,78,60,57">
+                <Grid Grid.Column="0"><Button x:Name="HomeTextButton" Classes="ribbonPrimary toolAction" Tag="home.annotate.text" Click="OnUiActionClick" ToolTip.Tip="Texto (MT)&#x0a;Crea un objeto de texto multilínea" AutomationProperties.Name="Texto"><StackPanel Spacing="3"><local:CadToolIcon Tool="Text" Width="43" Height="43" /><TextBlock Text="Texto" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button><Button Width="28" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Tag="home.annotate.text-menu" Click="OnUiActionClick" ToolTip.Tip="Variantes de texto" AutomationProperties.Name="Variantes de texto"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid>
+                <Button x:Name="HomeMultilineButton" Grid.Column="1" Classes="ribbonPrimary toolAction" Tag="home.annotate.multiline" Click="OnUiActionClick" ToolTip.Tip="Muro doble (ML)&#x0a;Dibuja dos LINE paralelas" AutomationProperties.Name="Multilínea"><StackPanel Spacing="3"><local:CadToolIcon Tool="Multiline" Width="43" Height="43" /><TextBlock Text="Multilínea" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button>
+                <Button x:Name="HomeDimensionButton" Grid.Column="2" Classes="ribbonPrimary toolAction" Tag="home.annotate.dimension" Click="OnUiActionClick" ToolTip.Tip="Cota (DIM)&#x0a;Acota de forma inteligente" AutomationProperties.Name="Cota"><StackPanel Spacing="3"><local:CadToolIcon Tool="Dimension" Width="43" Height="43" /><TextBlock Text="Cota" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button>
+                <Button Grid.Column="3" Classes="ribbonPrimary toolAction" Tag="home.annotate.table" Click="OnUiActionClick" ToolTip.Tip="Tabla (TB)&#x0a;Inserta una tabla en el dibujo" AutomationProperties.Name="Tabla"><StackPanel Spacing="3"><local:CadToolIcon Tool="Table" Width="43" Height="43" /><TextBlock Text="Tabla" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button>
+              </Grid>
+              <Button Grid.Row="1" Classes="groupLabel" Tag="home.annotate.menu" Click="OnUiActionClick" AutomationProperties.Name="Menú Anotación"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4"><TextBlock Text="Anotación" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#9DABBD" VerticalAlignment="Center" /></StackPanel></Button>
+            </Grid>
+          </Border>
+
+          <Border x:Name="RibbonLayersGroup" Grid.Column="3" Width="349" Classes="ribbonGroup">
+            <Grid RowDefinitions="111,28,*">
+              <Grid ColumnDefinitions="101,*">
+                <Button x:Name="LayerManagerButton" Classes="ribbonPrimary" Tag="home.layers.properties" Click="OnUiActionClick" ToolTip.Tip="Propiedades de capa (LA)&#x0a;Abre el administrador de capas" AutomationProperties.Name="Propiedades de capa"><StackPanel Spacing="1"><local:CadToolIcon Tool="LayerProperties" Width="43" Height="43" /><TextBlock Text="Propiedades&#x0a;de capa" FontSize="14" TextAlignment="Center" HorizontalAlignment="Center" /></StackPanel></Button>
+                <Grid Grid.Column="1" RowDefinitions="34,34,*" Margin="3,10,9,1">
+                  <UniformGrid Rows="1" Columns="8">
+                    <Button Classes="ribbonMini" Tag="home.layers.visible" Click="OnUiActionClick" ToolTip.Tip="Visibilidad de capa" AutomationProperties.Name="Visibilidad de capa"><local:CadToolIcon Tool="Visibility" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini toolAction" Tag="home.layers.set-current" Click="OnUiActionClick" ToolTip.Tip="Establecer capa actual" AutomationProperties.Name="Establecer capa actual"><local:CadToolIcon Tool="Check" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini toolAction" Tag="home.layers.match" Click="OnUiActionClick" ToolTip.Tip="Igualar capa" AutomationProperties.Name="Igualar capa"><local:CadToolIcon Tool="MatchProperties" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini" Tag="home.layers.lock" Click="OnUiActionClick" ToolTip.Tip="Bloquear capa" AutomationProperties.Name="Bloquear capa"><local:CadToolIcon Tool="Lock" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini toolAction" Tag="home.layers.isolate" Click="OnUiActionClick" ToolTip.Tip="Aislar capa" AutomationProperties.Name="Aislar capa"><local:CadToolIcon Tool="Isolate" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini" Tag="home.layers.color" Click="OnUiActionClick" ToolTip.Tip="Color de capa" AutomationProperties.Name="Color de capa"><local:CadToolIcon Tool="Color" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini toolAction" Tag="home.layers.zero" Click="OnUiActionClick" ToolTip.Tip="Mover a capa 0" AutomationProperties.Name="Mover a capa 0"><local:CadToolIcon Tool="LayerZero" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini" Tag="home.layers.filters" Click="OnUiActionClick" ToolTip.Tip="Filtros de capa" AutomationProperties.Name="Filtros de capa"><local:CadToolIcon Tool="Filter" Width="18" Height="18" /></Button>
+                  </UniformGrid>
+                  <UniformGrid Grid.Row="1" Rows="1" Columns="8">
+                    <Button Classes="ribbonMini toolAction" Tag="home.layers.previous" Click="OnUiActionClick" ToolTip.Tip="Capa anterior" AutomationProperties.Name="Capa anterior"><local:CadToolIcon Tool="LayerPrev" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini toolAction" Tag="home.layers.next" Click="OnUiActionClick" ToolTip.Tip="Capa siguiente" AutomationProperties.Name="Capa siguiente"><local:CadToolIcon Tool="LayerNext" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini" Tag="home.layers.linetype" Click="OnUiActionClick" ToolTip.Tip="Tipo de línea" AutomationProperties.Name="Tipo de línea"><local:CadToolIcon Tool="Linetype" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini" Tag="home.layers.lineweight" Click="OnUiActionClick" ToolTip.Tip="Grosor de línea" AutomationProperties.Name="Grosor de línea"><local:CadToolIcon Tool="Lineweight" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini toolAction" Tag="home.layers.undo" Click="OnUiActionClick" ToolTip.Tip="Deshacer capa" AutomationProperties.Name="Deshacer cambio de capa"><local:CadToolIcon Tool="Undo" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini" Tag="home.layers.states" Click="OnUiActionClick" ToolTip.Tip="Estados de capa" AutomationProperties.Name="Estados de capa"><local:CadToolIcon Tool="LayerStates" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini" Tag="home.layers.list" Click="OnUiActionClick" ToolTip.Tip="Lista de capas" AutomationProperties.Name="Lista de capas"><local:CadToolIcon Tool="LayerList" Width="18" Height="18" /></Button>
+                    <Button Classes="ribbonMini" Tag="home.layers.more" Click="OnUiActionClick" ToolTip.Tip="Más opciones de capa" AutomationProperties.Name="Más opciones de capa"><local:CadToolIcon Tool="ChevronDown" Width="16" Height="16" /></Button>
+                  </UniformGrid>
+                  <Border Grid.Row="2" Height="31" Background="#0A1524" BorderBrush="#2A405C" BorderThickness="1" CornerRadius="4" VerticalAlignment="Bottom">
+                    <Grid ColumnDefinitions="28,28,*">
+                      <Border Width="15" Height="15" Background="#F2F4F7" BorderBrush="#7F8A99" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <local:CadToolIcon Grid.Column="1" Tool="Layer" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <ComboBox x:Name="CurrentLayerCombo" Grid.Column="2" BorderThickness="0" Background="Transparent" Foreground="#D6DCE2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" SelectionChanged="OnCurrentLayerSelectionChanged" AutomationProperties.Name="Capa actual" />
+                      <TextBlock x:Name="CurrentLayerText" Grid.Column="2" Margin="10,0,28,0" VerticalAlignment="Center" Foreground="#D6DCE2" IsHitTestVisible="False" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                  </Border>
+                </Grid>
+              </Grid>
+              <Button Grid.Row="1" Classes="groupLabel" Tag="home.layers.menu" Click="OnUiActionClick" AutomationProperties.Name="Menú Capas"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4"><TextBlock Text="Capas" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#9DABBD" VerticalAlignment="Center" /></StackPanel></Button>
+            </Grid>
+          </Border>
+
+          <Border x:Name="RibbonBlockGroup" Grid.Column="4" Width="166" Classes="ribbonGroup">
+            <Grid RowDefinitions="111,28,*">
+              <Grid ColumnDefinitions="76,90">
+                <Button Classes="ribbonPrimary" Tag="home.block.insert" Click="OnUiActionClick" ToolTip.Tip="Insertar (I)&#x0a;Inserta un bloque en el dibujo" AutomationProperties.Name="Insertar bloque"><StackPanel Spacing="3"><local:CadToolIcon Tool="Insert" Width="43" Height="43" /><TextBlock Text="Insertar" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button>
+                <Button Grid.Column="1" Classes="ribbonPrimary toolAction" Tag="home.block.basepoint" Click="OnUiActionClick" ToolTip.Tip="Cambiar punto base (BASE)&#x0a;Redefine el punto base del contenido" AutomationProperties.Name="Cambiar punto base"><StackPanel Spacing="1"><local:CadToolIcon Tool="ChangeBase" Width="43" Height="43" /><TextBlock Text="Cambiar&#x0a;Punto base" FontSize="14" TextAlignment="Center" HorizontalAlignment="Center" /></StackPanel></Button>
+              </Grid>
+              <Button Grid.Row="1" Classes="groupLabel" Tag="home.block.menu" Click="OnUiActionClick" AutomationProperties.Name="Menú Bloque"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4"><TextBlock Text="Bloque" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#9DABBD" VerticalAlignment="Center" /></StackPanel></Button>
+            </Grid>
+          </Border>
+
+          <Border x:Name="RibbonPropertiesTile" Grid.Column="5" Width="101" Classes="ribbonGroup">
+            <Grid RowDefinitions="111,28,*">
+              <Grid><Button x:Name="PropertiesRibbonButton" Classes="ribbonTile" Tag="home.properties" Click="OnUiActionClick" ToolTip.Tip="Propiedades (Ctrl+1)&#x0a;Abre la paleta de propiedades" AutomationProperties.Name="Propiedades"><StackPanel Spacing="2"><local:CadToolIcon Tool="Properties" Width="43" Height="43" /><TextBlock Text="Propiedades" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button><Button Width="30" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Tag="home.properties.menu" Click="OnUiActionClick" ToolTip.Tip="Opciones de Propiedades" AutomationProperties.Name="Opciones de Propiedades"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid>
+              <TextBlock Grid.Row="1" Classes="groupLabel" Text="Propiedades" />
+            </Grid>
+          </Border>
+
+          <Border x:Name="RibbonClipboardTile" Grid.Column="6" Width="123" Classes="ribbonGroup" BorderThickness="0">
+            <Grid RowDefinitions="111,28,*">
+              <Grid><Button Classes="ribbonTile" Tag="home.clipboard.paste" Click="OnUiActionClick" ToolTip.Tip="Pegar (Ctrl+V)&#x0a;Pega el contenido del portapapeles" AutomationProperties.Name="Pegar"><StackPanel Spacing="2"><local:CadToolIcon Tool="Paste" Width="43" Height="43" /><TextBlock Text="Pegar" FontSize="14" HorizontalAlignment="Center" /></StackPanel></Button><Button Width="30" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Tag="home.clipboard" Click="OnUiActionClick" ToolTip.Tip="Opciones de Portapapeles" AutomationProperties.Name="Opciones de Portapapeles"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid>
+              <TextBlock Grid.Row="1" Classes="groupLabel" Text="Portapapeles" />
+            </Grid>
+          </Border>
+
+          <!-- The "More" card lives in the last (*) column so it sits flush against
+               the final visible group instead of floating right-aligned with a dead gap. Its flyout
+               is rebuilt in code with the commands of the groups that actually collapsed. -->
+          <Button x:Name="RibbonOverflowButton" Grid.Column="7" Classes="ribbonOverflow" IsVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top" Width="96" Height="111" Margin="6,0,0,0" Tag="home.overflow" Click="OnUiActionClick" AutomationProperties.Name="Más comandos de Inicio">
+            <StackPanel><local:CadToolIcon Tool="More" Width="38" Height="38" /><TextBlock Text="Más" FontSize="14" HorizontalAlignment="Center" /></StackPanel>
+            <Button.Flyout>
+              <Flyout Placement="Bottom">
+                <Border Background="#101B2A" BorderBrush="#2B4664" BorderThickness="1" Padding="7" CornerRadius="7">
+                  <ScrollViewer MaxHeight="430" VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="OverflowFlyoutList" Width="244" Spacing="2" />
+                  </ScrollViewer>
+                </Border>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+
+          <ItemsControl x:Name="RibbonContextPanel" IsVisible="False" HorizontalAlignment="Left" VerticalAlignment="Stretch">
+            <ItemsControl.Template>
+              <ControlTemplate><ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" /></ControlTemplate>
+            </ItemsControl.Template>
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="ribbonGroup" Classes.ribbonGroupLast="{Binding IsLast}">
+                  <Grid RowDefinitions="111,28,*">
+                    <ItemsControl ItemsSource="{Binding Commands}">
+                      <ItemsControl.Template>
+                        <ControlTemplate><ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" /></ControlTemplate>
+                      </ItemsControl.Template>
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Grid Width="80">
+                            <Button Classes="ribbonPrimary toolAction" Padding="2,17,2,18" HorizontalContentAlignment="Stretch" Click="OnRibbonCommandClick" ToolTip.Tip="{Binding Tooltip}" Tag="{Binding ActionId}" AutomationProperties.Name="{Binding Label}">
+                              <Grid RowDefinitions="43,4,38">
+                                <local:CadToolIcon Tool="{Binding Icon}" Width="43" Height="43" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="2" Text="{Binding Label}" FontSize="13" LineHeight="16" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" TextAlignment="Center" HorizontalAlignment="Stretch" VerticalAlignment="Top" MaxWidth="96" />
+                              </Grid>
+                            </Button>
+                            <Button IsVisible="{Binding HasVariants}" Width="30" Height="16" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,13" Click="OnRibbonCommandMenuClick" ToolTip.Tip="{Binding Tooltip}" Tag="{Binding VariantActionId}" AutomationProperties.Name="{Binding VariantAutomationName}"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Grid.Row="1" IsVisible="{Binding HasLauncher}" Classes="groupLabel" Tag="ribbon.context.overflow" Click="OnUiActionClick" AutomationProperties.Name="{Binding Label}">
+                      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                        <local:CadToolIcon Tool="ChevronDown" Width="10" Height="10" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <TextBlock Grid.Row="1" IsVisible="{Binding IsLabelOnly}" Classes="groupLabel" Text="{Binding Label}" HorizontalAlignment="Stretch" TextAlignment="Center" Padding="2,0" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Button x:Name="ContextRibbonOverflowButton" Classes="ribbonOverflow" IsVisible="False" HorizontalAlignment="Right" VerticalAlignment="Top" Width="96" Height="111" Margin="0,0,5,0" Tag="ribbon.context.overflow" Click="OnUiActionClick" AutomationProperties.Name="Más comandos de la pestaña actual"><StackPanel><local:CadToolIcon Tool="More" Width="38" Height="38" /><TextBlock Text="Más" FontSize="14" HorizontalAlignment="Center" /><TextBlock Text="comandos" FontSize="10" Foreground="#8FA2B6" HorizontalAlignment="Center" /></StackPanel></Button>
+        </Grid>
+      </Border>
+
+      <!-- Workspace: 53 rail + 1242 document + 347 properties at the target size. -->
+      <Grid x:Name="WorkspaceGrid" Grid.Row="4" Margin="8,0" ColumnDefinitions="53,8,*,6,347" RowDefinitions="43,*">
+        <Border Grid.Column="0" Grid.RowSpan="2" Background="#171E25" BorderBrush="#343F49" BorderThickness="1" CornerRadius="3">
+          <Grid RowDefinitions="*,Auto" Margin="4,5">
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="0">
+              <Button x:Name="SelectToolButton" Classes="rail toolAction active" ToolTip.Tip="Seleccionar" AutomationProperties.Name="Seleccionar" Tag="workspace.tool.select" Click="OnUiActionClick"><local:CadToolIcon Tool="Cursor" Width="24" Height="24" /></Button>
+              <Button x:Name="RailLineButton" Classes="rail toolAction" ToolTip.Tip="Línea" AutomationProperties.Name="Línea" Tag="workspace.tool.line" Click="OnUiActionClick"><local:CadToolIcon Tool="Line" Width="24" Height="24" /></Button>
+              <Button x:Name="RailPolylineButton" Classes="rail toolAction" ToolTip.Tip="Polilínea" AutomationProperties.Name="Polilínea" Tag="workspace.tool.polyline" Click="OnUiActionClick"><local:CadToolIcon Tool="Polyline" Width="24" Height="24" /></Button>
+              <Button x:Name="RailCircleButton" Classes="rail toolAction" ToolTip.Tip="Círculo" AutomationProperties.Name="Círculo" Tag="workspace.tool.circle" Click="OnUiActionClick"><local:CadToolIcon Tool="Circle" Width="24" Height="24" /></Button>
+              <Button x:Name="RailArcButton" Classes="rail toolAction" ToolTip.Tip="Arco" AutomationProperties.Name="Arco" Tag="workspace.tool.arc" Click="OnUiActionClick"><local:CadToolIcon Tool="Arc" Width="24" Height="24" /></Button>
+              <Button x:Name="RailMoveButton" Classes="rail toolAction" ToolTip.Tip="Desplazar" AutomationProperties.Name="Desplazar" Tag="workspace.tool.move" Click="OnUiActionClick"><local:CadToolIcon Tool="Move" Width="24" Height="24" /></Button>
+              <Button x:Name="RailCopyButton" Classes="rail toolAction" ToolTip.Tip="Copiar" AutomationProperties.Name="Copiar" Tag="workspace.tool.copy" Click="OnUiActionClick"><local:CadToolIcon Tool="Copy" Width="24" Height="24" /></Button>
+              <Button x:Name="RailMirrorButton" Classes="rail toolAction" ToolTip.Tip="Simetría" AutomationProperties.Name="Simetría" Tag="workspace.tool.mirror" Click="OnUiActionClick"><local:CadToolIcon Tool="Mirror" Width="24" Height="24" /></Button>
+              <Button x:Name="RailDimensionButton" Classes="rail toolAction" ToolTip.Tip="Cota" AutomationProperties.Name="Cota" Tag="workspace.tool.dimension" Click="OnUiActionClick"><local:CadToolIcon Tool="Dimension" Width="24" Height="24" /></Button>
+              <Button x:Name="RailTextButton" Classes="rail toolAction" ToolTip.Tip="Texto" AutomationProperties.Name="Texto" Tag="workspace.tool.text" Click="OnUiActionClick"><local:CadToolIcon Tool="Text" Width="24" Height="24" /></Button>
+              <Button x:Name="RailMoreButton" Classes="rail" ToolTip.Tip="Más" AutomationProperties.Name="Más herramientas" Tag="workspace.tool.more" Click="OnUiActionClick"><local:CadToolIcon Tool="More" Width="24" Height="24" /></Button>
+            </StackPanel>
+            </ScrollViewer>
+            <Button x:Name="RailSettingsButton" Grid.Row="1" Classes="rail" ToolTip.Tip="Ajustes" AutomationProperties.Name="Ajustes de herramientas" Tag="workspace.tool.settings" Click="OnUiActionClick"><local:CadToolIcon Tool="Settings" Width="24" Height="24" /></Button>
+          </Grid>
+        </Border>
+
+        <Border Grid.Column="2" Grid.Row="0" Background="#151B21" BorderBrush="#303A44" BorderThickness="1" CornerRadius="3,3,0,0">
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <StackPanel x:Name="DocumentTabsPanel" Orientation="Horizontal" Margin="6,5,0,0" Spacing="8">
+            <Border Classes="docTabShell active">
+              <Grid ColumnDefinitions="116,30">
+                <Button x:Name="DocumentTabButton" Classes="docTab active" Width="116" Height="37" Content="Sin título.arcf" HorizontalContentAlignment="Left" Tag="document.select.drawing-1" Click="OnUiActionClick" AutomationProperties.Name="Seleccionar Sin título.arcf" />
+                <Button x:Name="CloseDocumentButton" Classes="docTabClose" Grid.Column="1" Width="30" Height="37" Padding="0" ToolTip.Tip="Cerrar Sin título.arcf" Tag="document.close.drawing-1" Click="OnUiActionClick" AutomationProperties.Name="Cerrar Sin título.arcf"><local:CadToolIcon Tool="Close" Width="14" Height="14" /></Button>
+              </Grid>
+            </Border>
+            <Button x:Name="NewWorkspaceDocumentButton" Classes="addTile" Width="34" Height="34" Padding="0" ToolTip.Tip="Nuevo dibujo" Tag="document.new" Click="OnUiActionClick" AutomationProperties.Name="Nuevo dibujo"><local:CadToolIcon Tool="Plus" Width="15" Height="15" /></Button>
+          </StackPanel>
+          </ScrollViewer>
+        </Border>
+
+        <Border Grid.Column="2" Grid.Row="1" BorderBrush="#303A44" BorderThickness="1" CornerRadius="0,0,2,2" ClipToBounds="True">
+          <Grid>
+            <local:CadViewport x:Name="WorkspaceViewport" Focusable="True" AutomationProperties.Name="Área de dibujo">
+              <local:CadViewport.ContextFlyout>
+                <Flyout Placement="Pointer">
+                  <Border Width="230" Background="#202831" BorderBrush="#3A4651" BorderThickness="1" Padding="7" CornerRadius="3"><StackPanel Spacing="3"><Button Height="35" Content="Seleccionar" HorizontalContentAlignment="Left" Tag="workspace.tool.select" Click="OnUiActionClick" AutomationProperties.Name="Seleccionar" /><Button Height="35" Content="Zoom" HorizontalContentAlignment="Left" Tag="view.nav.zoom" Click="OnUiActionClick" AutomationProperties.Name="Zoom" /><Button Height="35" Content="Encuadre" HorizontalContentAlignment="Left" Tag="view.nav.pan" Click="OnUiActionClick" AutomationProperties.Name="Encuadre" /><Button Height="35" Content="Orientación de vista…" HorizontalContentAlignment="Left" Tag="view.orientation" Click="OnUiActionClick" AutomationProperties.Name="Orientación de vista" /><Button Height="35" Content="Propiedades" HorizontalContentAlignment="Left" Tag="home.properties" Click="OnUiActionClick" AutomationProperties.Name="Propiedades" /><Button Height="35" Content="Capas" HorizontalContentAlignment="Left" Tag="home.layers.properties" Click="OnUiActionClick" AutomationProperties.Name="Capas" /></StackPanel></Border>
+                </Flyout>
+              </local:CadViewport.ContextFlyout>
+            </local:CadViewport>
+
+            <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="7,2,0,0" Orientation="Horizontal" Spacing="5">
+              <Button x:Name="ViewportMenuButton" Classes="viewChip" Content="[–]" Width="34" Tag="view.viewport.controls" Click="OnUiActionClick" ToolTip.Tip="Controles de ventana gráfica" AutomationProperties.Name="Controles de ventana gráfica" />
+              <Button x:Name="ViewOrientationButton" Classes="viewChip" Width="87" Tag="view.orientation" Click="OnUiActionClick" AutomationProperties.Name="Orientación de vista"><StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="Superior" FontSize="12" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#AEB7BC" VerticalAlignment="Center" /></StackPanel></Button>
+              <Button x:Name="VisualStyleButton" Classes="viewChip" Width="171" Tag="view.visual-style" Click="OnUiActionClick" AutomationProperties.Name="Estilo visual"><StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="Estructura alámbrica 2D" FontSize="12" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#AEB7BC" VerticalAlignment="Center" /></StackPanel></Button>
+              <Button x:Name="UcsButton" Classes="viewChip" Width="68" Tag="view.ucs" Click="OnUiActionClick" AutomationProperties.Name="Sistema de coordenadas"><StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="SCU" FontSize="12" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#AEB7BC" VerticalAlignment="Center" /></StackPanel></Button>
+            </StackPanel>
+
+            <Border HorizontalAlignment="Right" VerticalAlignment="Top" Width="37" Height="124" Margin="0,134,10,0" Background="#171E25" BorderBrush="#3A4651" BorderThickness="1" CornerRadius="3">
+              <StackPanel Margin="0,2">
+                <Button x:Name="ZoomInButton" Classes="navTool toolAction" ToolTip.Tip="Acercar; use la rueda para acercar o alejar" AutomationProperties.Name="Acercar" Tag="view.nav.zoom" Click="OnUiActionClick"><local:CadToolIcon Tool="Zoom" Width="19" Height="19" /></Button>
+                <Button x:Name="PanButton" Classes="navTool toolAction" ToolTip.Tip="Encuadre mediante arrastre" AutomationProperties.Name="Encuadre" Tag="view.nav.pan" Click="OnUiActionClick"><local:CadToolIcon Tool="Pan" Width="19" Height="19" /></Button>
+                <Button x:Name="FitViewButton" Classes="navTool" ToolTip.Tip="Ajustar todo el dibujo" AutomationProperties.Name="Ajustar dibujo" Tag="view.nav.view" Click="OnUiActionClick"><local:CadToolIcon Tool="View" Width="19" Height="19" /></Button>
+                <Button x:Name="ResetViewButton" Classes="navTool" ToolTip.Tip="Restablecer vista 1:1" AutomationProperties.Name="Restablecer vista" Tag="view.nav.more" Click="OnUiActionClick"><local:CadToolIcon Tool="More" Width="19" Height="19" /></Button>
+              </StackPanel>
+            </Border>
+
+            <Border x:Name="CommandSuggestionsPanel" IsVisible="False" Width="620" MaxHeight="230" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="70,0,70,86" Background="#171E25" BorderBrush="#3A4651" BorderThickness="1" CornerRadius="3" ZIndex="15"><ScrollViewer MaxHeight="225" VerticalScrollBarVisibility="Auto"><StackPanel x:Name="CommandSuggestionsList" Margin="6" Spacing="3" /></ScrollViewer></Border>
+            <Grid x:Name="CommandBar" MaxWidth="947" Height="72" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="70,0,70,9" RowDefinitions="29,0,43">
+              <Border MinWidth="178" MaxWidth="360" Height="29" HorizontalAlignment="Left" Margin="47,0,0,0" Background="#202831" BorderBrush="#3A4651" BorderThickness="1,1,1,0" CornerRadius="3,3,0,0">
+                <TextBlock x:Name="BackendStatusText" Text="Listo" FontSize="14" FontWeight="SemiBold" Margin="11,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Estado del backend" />
+              </Border>
+              <Grid Grid.Row="2" ColumnDefinitions="42,5,*">
+                <Grid RowDefinitions="*,*" Background="#171E25">
+                  <Border Grid.RowSpan="2" BorderBrush="#3A4651" BorderThickness="1" CornerRadius="3" IsHitTestVisible="False" />
+                  <Button x:Name="PreviousCommandButton" Height="20" Padding="0" Tag="command.previous" Click="OnUiActionClick" ToolTip.Tip="Comando anterior" AutomationProperties.Name="Comando anterior"><local:CadToolIcon Tool="ChevronUp" Width="14" Height="14" /></Button>
+                  <Button x:Name="NextCommandButton" Grid.Row="1" Height="20" Padding="0" Tag="command.next" Click="OnUiActionClick" ToolTip.Tip="Comando siguiente" AutomationProperties.Name="Comando siguiente"><local:CadToolIcon Tool="ChevronDown" Width="14" Height="14" /></Button>
+                </Grid>
+                <Border Grid.Column="2" Background="#171E25" BorderBrush="#3A4651" BorderThickness="1" CornerRadius="3">
+                  <Grid ColumnDefinitions="*,46,38,38,38,38,38">
+                    <TextBox x:Name="CommandInput" Height="41" Background="Transparent" BorderThickness="0" CornerRadius="7" Watermark="Escriba un comando" Tag="command.input" AutomationProperties.Name="Entrada de comando" />
+                    <Button x:Name="DynamicInputButton" Grid.Column="1" ToolTip.Tip="Entrada dinámica" AutomationProperties.Name="Entrada dinámica" Tag="command.dynamic" Click="OnUiActionClick"><local:CadToolIcon Tool="Dynamic" Width="18" Height="18" /></Button>
+                    <Button Grid.Column="2" ToolTip.Tip="Historial" AutomationProperties.Name="Historial de comandos" Tag="command.history" Click="OnUiActionClick"><local:CadToolIcon Tool="History" Width="18" Height="18" /></Button>
+                    <Button Grid.Column="3" ToolTip.Tip="Opciones" AutomationProperties.Name="Opciones de comando" Tag="command.options" Click="OnUiActionClick"><local:CadToolIcon Tool="Sliders" Width="18" Height="18" /></Button>
+                    <Button Grid.Column="4" ToolTip.Tip="Ajustes" AutomationProperties.Name="Ajustes de línea de comandos" Tag="command.settings" Click="OnUiActionClick"><local:CadToolIcon Tool="Settings" Width="18" Height="18" /></Button>
+                    <Button Grid.Column="5" ToolTip.Tip="Portapapeles" AutomationProperties.Name="Pegar en comando" Tag="command.paste" Click="OnUiActionClick"><local:CadToolIcon Tool="Paste" Width="18" Height="18" /></Button>
+                    <Button Grid.Column="6" ToolTip.Tip="Ayuda" AutomationProperties.Name="Ayuda de comandos" Tag="command.help" Click="OnUiActionClick"><local:CadToolIcon Tool="Help" Width="18" Height="18" /></Button>
+                  </Grid>
+                </Border>
+              </Grid>
+            </Grid>
+          </Grid>
+        </Border>
+
+        <Grid Grid.Column="2" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top" Width="110" Height="112" Margin="0,8,18,0">
+          <Canvas Width="110" Height="112">
+            <Ellipse Canvas.Left="1" Canvas.Top="0" Width="108" Height="108" Fill="#261B232B" Stroke="#52606C" StrokeThickness="1" />
+            <Ellipse Canvas.Left="15" Canvas.Top="14" Width="80" Height="80" Fill="Transparent" Stroke="#6045505A" StrokeThickness="1" />
+            <Path Data="M 88.5,20.5 L 92.5,16.5" Stroke="#697680" StrokeThickness="1.2" />
+            <Path Data="M 88.5,87.5 L 92.5,91.5" Stroke="#697680" StrokeThickness="1.2" />
+            <Path Data="M 21.5,87.5 L 17.5,91.5" Stroke="#697680" StrokeThickness="1.2" />
+            <Path Data="M 21.5,20.5 L 17.5,16.5" Stroke="#697680" StrokeThickness="1.2" />
+            <TextBlock Canvas.Left="52" Canvas.Top="2" Text="N" FontSize="12" Foreground="#BAC2CA" />
+            <TextBlock Canvas.Left="4" Canvas.Top="49" Text="O" FontSize="12" Foreground="#BAC2CA" />
+            <TextBlock Canvas.Left="96" Canvas.Top="49" Text="E" FontSize="12" Foreground="#BAC2CA" />
+            <TextBlock Canvas.Left="52" Canvas.Top="96" Text="S" FontSize="12" Foreground="#BAC2CA" />
+            <Path x:Name="ViewCubeTopFace" Data="M 33,34 L 55,23 L 77,34 L 55,45 Z" Fill="#59636D" Stroke="#89939C" StrokeThickness="1" />
+            <Path x:Name="ViewCubeFrontFace" Data="M 33,34 L 55,45 L 55,72 L 33,61 Z" Fill="#414B54" Stroke="#77828C" StrokeThickness="1" />
+            <Path x:Name="ViewCubeRightFace" Data="M 55,45 L 77,34 L 77,61 L 55,72 Z" Fill="#303942" Stroke="#77828C" StrokeThickness="1" />
+            <TextBlock x:Name="ViewCubeFaceLabel" Canvas.Left="46" Canvas.Top="27" Text="SUP" FontSize="9" FontWeight="SemiBold" Foreground="#E1E6EA" />
+            <Button x:Name="ViewCubeTopButton" Classes="cubeFace" Canvas.Left="33" Canvas.Top="20" Width="44" Height="26" Tag="view.cube.top" Click="OnUiActionClick" ToolTip.Tip="Vista superior" AutomationProperties.Name="Vista superior" />
+            <Button Classes="cubeFace" Canvas.Left="33" Canvas.Top="45" Width="22" Height="28" Tag="view.cube.front" Click="OnUiActionClick" ToolTip.Tip="Vista frontal" AutomationProperties.Name="Vista frontal" />
+            <Button Classes="cubeFace" Canvas.Left="55" Canvas.Top="45" Width="22" Height="28" Tag="view.cube.right" Click="OnUiActionClick" ToolTip.Tip="Vista derecha" AutomationProperties.Name="Vista derecha" />
+            <Button Classes="cubeFace" Canvas.Left="43" Canvas.Top="33" Width="24" Height="28" Tag="view.cube.isometric" Click="OnUiActionClick" ToolTip.Tip="Vista isométrica" AutomationProperties.Name="Vista isométrica" />
+            <Button Classes="cubeFace" Canvas.Left="45" Canvas.Top="0" Width="24" Height="18" Tag="view.compass.north" Click="OnUiActionClick" ToolTip.Tip="Vista norte" AutomationProperties.Name="Vista norte" />
+            <Button Classes="cubeFace" Canvas.Left="90" Canvas.Top="42" Width="20" Height="25" Tag="view.compass.east" Click="OnUiActionClick" ToolTip.Tip="Vista este" AutomationProperties.Name="Vista este" />
+            <Button Classes="cubeFace" Canvas.Left="45" Canvas.Top="90" Width="24" Height="22" Tag="view.compass.south" Click="OnUiActionClick" ToolTip.Tip="Vista sur" AutomationProperties.Name="Vista sur" />
+            <Button Classes="cubeFace" Canvas.Left="0" Canvas.Top="42" Width="20" Height="25" Tag="view.compass.west" Click="OnUiActionClick" ToolTip.Tip="Vista oeste" AutomationProperties.Name="Vista oeste" />
+          </Canvas>
+        </Grid>
+
+        <Border x:Name="LayerManagerPanel" Grid.Column="2" Grid.Row="1" IsVisible="False" Width="600" Height="420" Margin="14,48,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{StaticResource Brush.Palette.Bg}" BorderBrush="{StaticResource Brush.Palette.Border}" BorderThickness="1" CornerRadius="3" ZIndex="20" ClipToBounds="True">
+          <Grid RowDefinitions="42,42,40,*,34">
+            <Border Background="{StaticResource Brush.Palette.HeaderBg}" BorderBrush="{StaticResource Brush.Palette.HeaderBorder}" BorderThickness="0,0,0,1" Padding="14,0">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto"><StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Border Width="4" Height="18" Background="{StaticResource Brush.Palette.Accent}" CornerRadius="2" /><TextBlock Text="Administrador de capas" FontSize="14" FontWeight="SemiBold" /></StackPanel><Button x:Name="PinLayersButton" Grid.Column="1" Width="30" Height="30" Padding="6" Classes="paletteChrome active" Tag="dock.layers.pin" Click="OnUiActionClick" ToolTip.Tip="Fijar paleta" AutomationProperties.Name="Fijar Capas"><local:CadToolIcon Tool="Pin" Width="16" Height="16" /></Button><Button x:Name="AutoHideLayersButton" Grid.Column="2" Width="30" Height="30" Padding="6" Classes="paletteChrome" Tag="dock.layers.autohide" Click="OnUiActionClick" ToolTip.Tip="Ocultar automáticamente" AutomationProperties.Name="Ocultar Capas automáticamente"><local:CadToolIcon Tool="AutoHide" Width="16" Height="16" /></Button><Button x:Name="CloseLayersButton" Grid.Column="3" Width="30" Height="30" Padding="7" Classes="paletteChrome" Tag="dock.layers.close" Click="OnUiActionClick" ToolTip.Tip="Cerrar" AutomationProperties.Name="Cerrar Capas"><local:CadToolIcon Tool="Close" Width="14" Height="14" /></Button></Grid>
+            </Border>
+            <TextBox x:Name="LayerSearchBox" Grid.Row="1" Margin="12,7" Watermark="Nombre de capa" Tag="layers.name" AutomationProperties.Name="Nombre de capa" />
+            <Border Grid.Row="2" BorderBrush="#20364F" BorderThickness="0,0,0,1">
+              <StackPanel Orientation="Horizontal" Margin="10,4" Spacing="4">
+                <Button Classes="paletteTool" Tag="layers.new" Click="OnUiActionClick" ToolTip.Tip="Nueva capa" AutomationProperties.Name="Nueva capa"><local:CadToolIcon Tool="Plus" Width="16" Height="16" /></Button>
+                <Button Classes="paletteTool" Tag="layers.delete" Click="OnUiActionClick" ToolTip.Tip="Eliminar capa" AutomationProperties.Name="Eliminar capa"><local:CadToolIcon Tool="Minus" Width="16" Height="16" /></Button>
+                <Button Classes="paletteTool" Tag="layers.rename" Click="OnUiActionClick" ToolTip.Tip="Renombrar capa" AutomationProperties.Name="Renombrar capa"><TextBlock Text="Aa" FontSize="11" FontWeight="SemiBold" /></Button>
+                <Button Classes="paletteTool" Tag="layers.filter" Click="OnUiActionClick" ToolTip.Tip="Filtros" AutomationProperties.Name="Filtros de capas"><local:CadToolIcon Tool="Filter" Width="18" Height="18" /></Button>
+                <Button Classes="paletteTool" Tag="layers.settings" Click="OnUiActionClick" ToolTip.Tip="Ajustes" AutomationProperties.Name="Ajustes de capas"><local:CadToolIcon Tool="Settings" Width="18" Height="18" /></Button>
+                <Button x:Name="LayerRowsToggleButton" Classes="paletteTool" Tag="layers.collapse" Click="OnLayerRowsToggleClick" ToolTip.Tip="Plegar o desplegar lista" AutomationProperties.Name="Plegar o desplegar lista de capas"><local:CadToolIcon x:Name="LayerRowsToggleIcon" Tool="ChevronDown" Width="15" Height="15" /></Button>
+              </StackPanel>
+            </Border>
+            <Grid x:Name="LayerRowsPanel" Grid.Row="3" RowDefinitions="31,Auto,Auto,*">
+              <Border Background="#101D2E" Padding="8,0"><Grid ColumnDefinitions="32,32,*,70,70,54,38,38"><TextBlock Text="Ver" FontSize="11" Foreground="#8292A6" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="Bloq" FontSize="11" Foreground="#8292A6" VerticalAlignment="Center" /><TextBlock Grid.Column="2" Text="Nombre" FontSize="11" Foreground="#8292A6" VerticalAlignment="Center" /><TextBlock Grid.Column="3" Text="Color" FontSize="11" Foreground="#8292A6" VerticalAlignment="Center" /><TextBlock Grid.Column="4" Text="T. línea" FontSize="11" Foreground="#8292A6" VerticalAlignment="Center" /><TextBlock Grid.Column="5" Text="Grosor" FontSize="11" Foreground="#8292A6" VerticalAlignment="Center" /><TextBlock Grid.Column="6" Text="Traz." FontSize="11" Foreground="#8292A6" VerticalAlignment="Center" /><TextBlock Grid.Column="7" Text="Inut." FontSize="11" Foreground="#8292A6" VerticalAlignment="Center" /></Grid></Border>
+              <Grid x:Name="LayerZeroRow" IsVisible="False" Classes="layerRow selected" Grid.Row="1" ColumnDefinitions="32,32,*,70,70,54,38,38" Margin="8,2">
+                <Button Classes="layerToggle active" Tag="layers.visible.0" Click="OnUiActionClick" ToolTip.Tip="Visibilidad de capa 0" AutomationProperties.Name="Visibilidad de capa 0"><local:CadToolIcon Tool="Visibility" Width="17" Height="17" /></Button>
+                <Button Grid.Column="1" Classes="layerToggle" Tag="layers.lock.0" Click="OnUiActionClick" ToolTip.Tip="Bloqueo de capa 0" AutomationProperties.Name="Bloqueo de capa 0"><local:CadToolIcon Tool="Lock" Width="16" Height="16" /></Button>
+                <Button x:Name="LayerZeroNameButton" Grid.Column="2" HorizontalContentAlignment="Left" Content="0" FontWeight="SemiBold" Tag="layers.select.0" Click="OnUiActionClick" AutomationProperties.Name="Seleccionar capa 0" />
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"><Border Width="12" Height="12" Background="#FFFFFF" /><TextBlock Text="Blanco" FontSize="11" /></StackPanel>
+                <TextBlock Grid.Column="4" Text="Continua" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="5" Text="Predet." FontSize="11" VerticalAlignment="Center" />
+                <Button Grid.Column="6" Classes="layerToggle active" Tag="layers.plot.0" Click="OnUiActionClick" ToolTip.Tip="Trazar capa 0" AutomationProperties.Name="Trazar capa 0"><local:CadToolIcon Tool="Print" Width="16" Height="16" /></Button>
+                <Button Grid.Column="7" Classes="layerToggle" Tag="layers.freeze.0" Click="OnUiActionClick" ToolTip.Tip="Inutilizar capa 0" AutomationProperties.Name="Inutilizar capa 0"><local:CadToolIcon Tool="Sun" Width="16" Height="16" /></Button>
+              </Grid>
+              <Grid x:Name="LayerWallsRow" IsVisible="False" Classes="layerRow" Grid.Row="2" ColumnDefinitions="32,32,*,70,70,54,38,38" Margin="8,2">
+                <Button Classes="layerToggle active" Tag="layers.visible.walls" Click="OnUiActionClick" ToolTip.Tip="Visibilidad de A-MUROS" AutomationProperties.Name="Visibilidad de A-MUROS"><local:CadToolIcon Tool="Visibility" Width="17" Height="17" /></Button>
+                <Button Grid.Column="1" Classes="layerToggle" Tag="layers.lock.walls" Click="OnUiActionClick" ToolTip.Tip="Bloqueo de A-MUROS" AutomationProperties.Name="Bloqueo de A-MUROS"><local:CadToolIcon Tool="Lock" Width="16" Height="16" /></Button>
+                <Button x:Name="LayerWallsNameButton" Grid.Column="2" HorizontalContentAlignment="Left" Content="A-MUROS" Tag="layers.select.walls" Click="OnUiActionClick" AutomationProperties.Name="Seleccionar A-MUROS" />
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"><Border Width="12" Height="12" Background="#00FFFF" /><TextBlock Text="Cian" FontSize="11" /></StackPanel>
+                <TextBlock Grid.Column="4" Text="Continua" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="5" Text="Predet." FontSize="11" VerticalAlignment="Center" />
+                <Button Grid.Column="6" Classes="layerToggle active" Tag="layers.plot.walls" Click="OnUiActionClick" ToolTip.Tip="Trazar A-MUROS" AutomationProperties.Name="Trazar A-MUROS"><local:CadToolIcon Tool="Print" Width="16" Height="16" /></Button>
+                <Button Grid.Column="7" Classes="layerToggle" Tag="layers.freeze.walls" Click="OnUiActionClick" ToolTip.Tip="Inutilizar A-MUROS" AutomationProperties.Name="Inutilizar A-MUROS"><local:CadToolIcon Tool="Sun" Width="16" Height="16" /></Button>
+              </Grid>
+              <ScrollViewer Grid.Row="1" Grid.RowSpan="3" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="LayerRowsList" Spacing="2" Margin="0,2" />
+              </ScrollViewer>
+            </Grid>
+            <Border Grid.Row="4" Background="{StaticResource Brush.Palette.FooterBg}" Padding="12,0"><TextBlock x:Name="LayerPanelStatus" Text="2 capas · capa actual: 0" FontSize="11" Foreground="{StaticResource Brush.Palette.FooterText}" VerticalAlignment="Center" /></Border>
+            <Thumb x:Name="LayerResizeThumb" Classes="resizeGrip" Grid.RowSpan="5" Width="7" HorizontalAlignment="Right" Cursor="SizeWestEast" Tag="dock.layers.resize" AutomationProperties.Name="Redimensionar Capas" />
+          </Grid>
+        </Border>
+
+        <Border x:Name="AuxiliaryPalettePanel" Grid.Column="2" Grid.Row="1" IsVisible="False" Width="430" Height="450" Margin="455,48,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{StaticResource Brush.Palette.Bg}" BorderBrush="{StaticResource Brush.Palette.Border}" BorderThickness="1" CornerRadius="3" ZIndex="21" ClipToBounds="True" KeyboardNavigation.TabNavigation="Cycle">
+          <Grid RowDefinitions="42,42,34,*">
+            <Border Background="{StaticResource Brush.Palette.HeaderBg}" BorderBrush="{StaticResource Brush.Palette.HeaderBorder}" BorderThickness="0,0,0,1" Padding="14,0"><Grid ColumnDefinitions="*,Auto,Auto,Auto"><StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Border Width="4" Height="18" Background="{StaticResource Brush.Palette.Accent}" CornerRadius="2" /><TextBlock x:Name="AuxPaletteTitle" Text="Paleta" FontSize="14" FontWeight="SemiBold" /></StackPanel><Button x:Name="PinAuxPaletteButton" Grid.Column="1" Width="30" Height="30" Padding="6" Classes="paletteChrome active" Tag="palette.aux.pin" Click="OnUiActionClick" ToolTip.Tip="Fijar paleta" AutomationProperties.Name="Fijar paleta"><local:CadToolIcon Tool="Pin" Width="16" Height="16" /></Button><Button x:Name="AutoHideAuxPaletteButton" Grid.Column="2" Width="30" Height="30" Padding="6" Classes="paletteChrome" Tag="palette.aux.autohide" Click="OnUiActionClick" ToolTip.Tip="Ocultar automáticamente" AutomationProperties.Name="Ocultar paleta automáticamente"><local:CadToolIcon Tool="AutoHide" Width="16" Height="16" /></Button><Button Grid.Column="3" Width="30" Height="30" Padding="7" Classes="paletteChrome" Tag="palette.aux.close" Click="OnUiActionClick" ToolTip.Tip="Cerrar" AutomationProperties.Name="Cerrar paleta"><local:CadToolIcon Tool="Close" Width="14" Height="14" /></Button></Grid></Border>
+            <TextBox x:Name="AuxPaletteSearchBox" Grid.Row="1" Margin="12,7" Watermark="Filtrar contenido" Tag="palette.tools" AutomationProperties.Name="Filtrar paleta" />
+            <Border Grid.Row="2" Background="{StaticResource Brush.Palette.FooterBg}" BorderBrush="#20364F" BorderThickness="0,0,0,1" Padding="12,0"><TextBlock x:Name="AuxPaletteStatus" Text="Estado local" FontSize="11" Foreground="{StaticResource Brush.Palette.FooterText}" VerticalAlignment="Center" /></Border>
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto"><StackPanel x:Name="AuxPaletteContent" Margin="10" Spacing="6" /></ScrollViewer>
+            <Thumb x:Name="AuxPaletteResizeThumb" Classes="resizeGrip" Grid.RowSpan="4" Width="7" HorizontalAlignment="Right" Cursor="SizeWestEast" Tag="palette.aux.resize" AutomationProperties.Name="Redimensionar paleta" />
+          </Grid>
+        </Border>
+
+        <GridSplitter x:Name="PropertiesSplitter" Grid.Column="3" Grid.RowSpan="2" Width="6" HorizontalAlignment="Stretch" Background="#29333C" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Tag="dock.properties.resize" AutomationProperties.Name="Redimensionar Propiedades" />
+
+        <Border x:Name="PropertiesDock" Grid.Column="4" Grid.RowSpan="2" Background="{StaticResource Brush.Palette.Bg}" BorderBrush="{StaticResource Brush.Palette.Border}" BorderThickness="1" CornerRadius="3" ClipToBounds="True">
+          <!-- The header (42) and second row (42) match the Layers palette so both
+               docked palettes share the same header and second-section heights. -->
+          <Grid RowDefinitions="42,42,40,*">
+            <Border Background="{StaticResource Brush.Palette.HeaderBg}" BorderBrush="{StaticResource Brush.Palette.HeaderBorder}" BorderThickness="0,0,0,1" Padding="14,0">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Border Width="3" Height="16" Background="{StaticResource Brush.Palette.Accent}" CornerRadius="1" /><TextBlock Text="Propiedades" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel>
+                <Button x:Name="PinPropertiesButton" Grid.Column="1" Width="30" Height="30" Padding="6" Classes="paletteChrome active" Tag="dock.properties.pin" Click="OnUiActionClick" ToolTip.Tip="Fijar paleta" AutomationProperties.Name="Fijar Propiedades"><local:CadToolIcon Tool="Pin" Width="16" Height="16" /></Button>
+                <Button x:Name="AutoHidePropertiesButton" Grid.Column="2" Width="30" Height="30" Padding="6" Classes="paletteChrome" Tag="dock.properties.autohide" Click="OnUiActionClick" ToolTip.Tip="Ocultar automáticamente" AutomationProperties.Name="Ocultar Propiedades automáticamente"><local:CadToolIcon Tool="AutoHide" Width="16" Height="16" /></Button>
+                <Button x:Name="ClosePropertiesButton" Grid.Column="3" Width="30" Height="30" Padding="7" Classes="paletteChrome" Tag="dock.properties.close" Click="OnUiActionClick" ToolTip.Tip="Cerrar" AutomationProperties.Name="Cerrar Propiedades"><local:CadToolIcon Tool="Close" Width="14" Height="14" /></Button>
+              </Grid>
+            </Border>
+            <ComboBox x:Name="PropertiesSelectionCombo" Grid.Row="1" Margin="12,6" Height="30" HorizontalAlignment="Stretch" SelectedIndex="0" IsEnabled="False" AutomationProperties.Name="Tipo de selección"><ComboBoxItem Content="Sin selección" /><ComboBoxItem Content="LINE seleccionada" /></ComboBox>
+            <Border Grid.Row="2" BorderBrush="#343F49" BorderThickness="0,0,0,1">
+              <StackPanel Orientation="Horizontal" Margin="15,4" Spacing="3">
+                <Button Classes="paletteTool active" Tag="properties.quick" Click="OnUiActionClick" ToolTip.Tip="Propiedades rápidas" AutomationProperties.Name="Propiedades rápidas"><local:CadToolIcon Tool="Properties" Width="19" Height="19" /></Button>
+                <Button Classes="paletteTool" Tag="properties.match" Click="OnUiActionClick" ToolTip.Tip="Igualar propiedades" AutomationProperties.Name="Igualar propiedades"><local:CadToolIcon Tool="MatchProperties" Width="19" Height="19" /></Button>
+                <Button Classes="paletteTool" Tag="properties.layer" Click="OnUiActionClick" ToolTip.Tip="Por capa" AutomationProperties.Name="Propiedades por capa"><local:CadToolIcon Tool="Layer" Width="19" Height="19" /></Button>
+                <Button Classes="paletteTool" Tag="properties.table" Click="OnUiActionClick" ToolTip.Tip="Vista tabular" AutomationProperties.Name="Vista tabular"><local:CadToolIcon Tool="Table" Width="19" Height="19" /></Button>
+                <Button Classes="paletteTool" Content="A-Z" FontSize="11" Width="40" Tag="properties.sort" Click="OnUiActionClick" ToolTip.Tip="Orden alfabético" AutomationProperties.Name="Orden alfabético" />
+              </StackPanel>
+            </Border>
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+              <StackPanel>
+                <Border x:Name="PropertiesModeNote" IsVisible="False" Background="#0A1622" BorderBrush="{StaticResource Brush.Palette.Accent}" BorderThickness="3,0,0,0" Padding="11,6" Margin="0,0,0,2"><TextBlock x:Name="PropertiesModeNoteText" Text="" FontSize="11" FontStyle="Italic" Foreground="#8FB0C8" TextWrapping="Wrap" /></Border>
+                <StackPanel x:Name="PropertiesPanel" IsVisible="False" AutomationProperties.Name="Propiedades de la selección">
+                  <Border Classes="propertySection"><TextBlock Text="Selección" FontWeight="SemiBold" VerticalAlignment="Center" /></Border>
+                  <Border Classes="propertyRow"><Grid ColumnDefinitions="145,*"><TextBlock Text="Tipo" FontSize="12" VerticalAlignment="Center" /><Border Grid.Column="1" Classes="propertyValue"><TextBlock x:Name="PropertyTypeText" Text="LINE" FontSize="12" VerticalAlignment="Center" /></Border></Grid></Border>
+                  <Border Classes="propertyRow"><Grid ColumnDefinitions="145,*"><TextBlock Text="ID" FontSize="12" VerticalAlignment="Center" /><Border Grid.Column="1" Classes="propertyValue"><TextBlock x:Name="PropertyIdText" Text="—" FontSize="12" VerticalAlignment="Center" /></Border></Grid></Border>
+                  <Border Classes="propertyRow"><Grid ColumnDefinitions="145,*"><TextBlock Text="Longitud" FontSize="12" VerticalAlignment="Center" /><Border Grid.Column="1" Classes="propertyValue"><TextBlock x:Name="PropertyLengthText" Text="0" FontSize="12" VerticalAlignment="Center" /></Border></Grid></Border>
+                </StackPanel>
+                <Button x:Name="GeneralSectionButton" Classes="propertySection active" Tag="properties.section.general" Click="OnUiActionClick" AutomationProperties.Name="Mostrar u ocultar General"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="General" FontWeight="SemiBold" VerticalAlignment="Center" /><local:CadToolIcon Grid.Column="1" Width="12" Height="12" VerticalAlignment="Center" /></Grid></Button>
+                <StackPanel x:Name="GeneralPropertyRows">
+                  <Border Classes="propertyRow"><Grid ColumnDefinitions="145,*"><TextBlock Text="Otras propiedades" FontSize="12" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="No disponible" FontSize="12" Foreground="{StaticResource Brush.Text.Muted}" VerticalAlignment="Center" /></Grid></Border>
+                </StackPanel>
+
+                <Button x:Name="ViewSectionButton" Classes="propertySection active" Tag="properties.section.view" Click="OnUiActionClick" AutomationProperties.Name="Mostrar u ocultar Vista"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="Vista" FontWeight="SemiBold" VerticalAlignment="Center" /><local:CadToolIcon Grid.Column="1" Width="12" Height="12" VerticalAlignment="Center" /></Grid></Button>
+                <StackPanel x:Name="ViewPropertyRows">
+                  <Border Classes="propertyRow"><Grid ColumnDefinitions="145,*"><TextBlock Text="Cámara" FontSize="12" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="Zoom / encuadre activos" FontSize="12" Foreground="{StaticResource Brush.Text.Muted}" VerticalAlignment="Center" /></Grid></Border>
+                </StackPanel>
+
+                <Button x:Name="MiscSectionButton" Classes="propertySection active" Tag="properties.section.misc" Click="OnUiActionClick" AutomationProperties.Name="Mostrar u ocultar Varios"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="Varios" FontWeight="SemiBold" VerticalAlignment="Center" /><local:CadToolIcon Grid.Column="1" Width="12" Height="12" VerticalAlignment="Center" /></Grid></Button>
+                <StackPanel x:Name="MiscPropertyRows">
+                  <Border Classes="propertyRow"><Grid ColumnDefinitions="145,*"><TextBlock Text="Metadatos" FontSize="12" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="No disponible" FontSize="12" Foreground="{StaticResource Brush.Text.Muted}" VerticalAlignment="Center" /></Grid></Border>
+                </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
+            <Thumb x:Name="PropertiesResizeThumb" Classes="resizeGrip" Grid.RowSpan="4" Width="7" HorizontalAlignment="Left" Cursor="SizeWestEast" Tag="dock.properties.resize" AutomationProperties.Name="Redimensionar Propiedades" />
+          </Grid>
+        </Border>
+      </Grid>
+
+      <!-- 49 px model/layout and drafting status card. -->
+      <Border Grid.Row="6" Margin="8,0" Background="#171E25" BorderBrush="#343F49" BorderThickness="1" CornerRadius="3">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <ScrollViewer Grid.Column="0" MaxWidth="720" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"><StackPanel x:Name="LayoutTabsPanel" Orientation="Horizontal" Spacing="4">
+            <Button x:Name="LayoutMenuButton" Width="53" Height="39" Margin="0,4" Padding="0" CornerRadius="3" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" ToolTip.Tip="Presentaciones" AutomationProperties.Name="Menú de presentaciones" Tag="layout.menu" Click="OnUiActionClick"><StackPanel Width="18" Spacing="4" VerticalAlignment="Center" HorizontalAlignment="Center"><Border Height="1" Background="#9CA6AF" /><Border Height="1" Background="#9CA6AF" /><Border Height="1" Background="#9CA6AF" /></StackPanel></Button>
+            <Button x:Name="ModelLayoutButton" Classes="layoutTab active" Width="97" Height="39" Margin="0,4" Padding="0" Content="Modelo" FontSize="13" Tag="layout.model" Click="OnUiActionClick" AutomationProperties.Name="Modelo" />
+            <Button x:Name="LayoutOneButton" Classes="layoutTab" Width="134" Height="39" Margin="0,4" Padding="0" Content="Presentación1" FontSize="13" Tag="layout.layout-1" Click="OnUiActionClick" AutomationProperties.Name="Presentación1" />
+            <Border x:Name="LayoutTwoContainer" Width="136" Height="39" Margin="0,4" BorderBrush="Transparent" BorderThickness="1" CornerRadius="3"><Grid ColumnDefinitions="108,28"><Button x:Name="LayoutTwoButton" Classes="layoutTab" Width="108" Height="37" Padding="0" Content="Presentación2" FontSize="13" CornerRadius="3,0,0,3" Tag="layout.layout-2" Click="OnUiActionClick" AutomationProperties.Name="Presentación2" /><Button Grid.Column="1" Width="28" Height="37" Padding="0" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" Tag="layout.layout-2-menu" Click="OnUiActionClick" ToolTip.Tip="Opciones de Presentación2" AutomationProperties.Name="Opciones de Presentación2"><local:CadToolIcon Tool="ChevronDown" Width="13" Height="13" Accent="#AEB7BC" /></Button></Grid></Border>
+            <Button x:Name="AddLayoutButton" Classes="addTile" Width="44" Height="39" Margin="0,4" Padding="0" ToolTip.Tip="Nueva presentación" Tag="layout.add" Click="OnUiActionClick" AutomationProperties.Name="Nueva presentación"><local:CadToolIcon Tool="Plus" Width="15" Height="15" Accent="#C7D1DE" /></Button>
+          </StackPanel></ScrollViewer>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+            <Button x:Name="GridStatusButton" Classes="status active" ToolTip.Tip="Rejilla" AutomationProperties.Name="Rejilla" Tag="status.grid" Click="OnUiActionClick"><local:CadToolIcon Tool="Grid" Width="21" Height="21" /></Button>
+            <Button x:Name="SnapStatusButton" Classes="status" ToolTip.Tip="Forzar cursor" AutomationProperties.Name="Forzar cursor" Tag="status.snap" Click="OnUiActionClick"><local:CadToolIcon Tool="Snap" Width="21" Height="21" /></Button>
+            <Button x:Name="OrthoStatusButton" Classes="status" ToolTip.Tip="Modo ortogonal" AutomationProperties.Name="Modo ortogonal" Tag="status.ortho" Click="OnUiActionClick"><local:CadToolIcon Tool="Ortho" Width="21" Height="21" /></Button>
+            <Button x:Name="PolarStatusButton" Classes="status" ToolTip.Tip="Rastreo polar" AutomationProperties.Name="Rastreo polar" Tag="status.polar" Click="OnUiActionClick"><local:CadToolIcon Tool="Polar" Width="21" Height="21" /></Button>
+            <Button x:Name="OsnapStatusButton" Classes="status" ToolTip.Tip="Referencia a objetos" AutomationProperties.Name="Referencia a objetos" Tag="status.osnap" Click="OnUiActionClick"><local:CadToolIcon Tool="Osnap" Width="21" Height="21" /></Button>
+            <Button x:Name="OtrackStatusButton" Classes="status" ToolTip.Tip="Rastreo" AutomationProperties.Name="Rastreo" Tag="status.otrack" Click="OnUiActionClick"><local:CadToolIcon Tool="Otrack" Width="21" Height="21" /></Button>
+            <Button x:Name="DynamicStatusButton" Classes="status" ToolTip.Tip="Entrada dinámica" AutomationProperties.Name="Entrada dinámica" Tag="status.dynamic" Click="OnUiActionClick"><local:CadToolIcon Tool="Dynamic" Width="21" Height="21" /></Button>
+            <Button x:Name="LineweightStatusButton" Classes="status" ToolTip.Tip="Grosor" AutomationProperties.Name="Grosor de línea" Tag="status.lineweight" Click="OnUiActionClick"><local:CadToolIcon Tool="Lineweight" Width="21" Height="21" /></Button>
+            <Button x:Name="DucsStatusButton" Classes="status" ToolTip.Tip="SCU dinámico" AutomationProperties.Name="SCU dinámico" Tag="status.ducs" Click="OnUiActionClick"><local:CadToolIcon Tool="Ducs" Width="21" Height="21" /></Button>
+            <Button x:Name="SelectionStatusButton" Classes="status" ToolTip.Tip="Selección" AutomationProperties.Name="Selección cíclica" Tag="status.selection" Click="OnUiActionClick"><local:CadToolIcon Tool="Selection" Width="21" Height="21" /></Button>
+            <Button x:Name="AnnotationStatusButton" Classes="status" ToolTip.Tip="Anotación" AutomationProperties.Name="Anotación" Tag="status.annotation" Click="OnUiActionClick"><local:CadToolIcon Tool="Annotation" Width="21" Height="21" /></Button>
+            <Button x:Name="PaperStatusButton" Classes="status" ToolTip.Tip="Papel" AutomationProperties.Name="Espacio papel" Tag="status.paper" Click="OnUiActionClick"><local:CadToolIcon Tool="Paper" Width="21" Height="21" /></Button>
+            <Border Width="1" Height="31" Background="#343F49" Margin="3,0" />
+            <Button x:Name="StatusScaleButton" Width="92" Height="39" Foreground="#B4C0CF" BorderThickness="0" CornerRadius="0" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" Tag="status.scale" Click="OnUiActionClick" AutomationProperties.Name="Escala de anotación"><StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="1:100" FontSize="14" VerticalAlignment="Center" /><local:CadToolIcon Tool="ChevronDown" Width="12" Height="12" Accent="#B4C0CF" VerticalAlignment="Center" /></StackPanel></Button>
+            <Border Width="1" Height="31" Background="#343F49" Margin="3,0" />
+            <Button Width="70" Height="39" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" ToolTip.Tip="Ajustes" AutomationProperties.Name="Personalizar barra de estado" Tag="status.settings" Click="OnUiActionClick"><local:CadToolIcon Tool="Settings" Width="22" Height="22" /></Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Grid>
+  </Border>
+
+  <Border x:Name="SearchResultsPanel" IsVisible="False" Width="478" MaxHeight="430" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,46,0,0" Background="#171E25" BorderBrush="#3A4651" BorderThickness="1" CornerRadius="0,0,3,3" ZIndex="120" ClipToBounds="True">
+    <Grid RowDefinitions="42,*">
+      <Border Background="#202831" BorderBrush="#343F49" BorderThickness="0,0,0,1" Padding="13,0"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="Comandos" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" /><TextBlock x:Name="SearchResultCount" Grid.Column="1" Text="0 resultados" FontSize="11" Foreground="#818C96" VerticalAlignment="Center" /></Grid></Border>
+      <ScrollViewer Grid.Row="1" MaxHeight="380" VerticalScrollBarVisibility="Auto"><StackPanel x:Name="SearchResultsList" Margin="7" Spacing="3" /></ScrollViewer>
+    </Grid>
+  </Border>
+
+  <Border x:Name="TopSurfacePanel" IsVisible="False" Width="420" MaxHeight="680" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,54,0,0" Background="#171E25" BorderBrush="#3A4651" BorderThickness="1" CornerRadius="3" ZIndex="130" ClipToBounds="True" KeyboardNavigation.TabNavigation="Cycle">
+    <Grid RowDefinitions="52,Auto,*">
+      <Border Background="#202831" BorderBrush="#343F49" BorderThickness="0,0,0,1" Padding="16,0"><Grid ColumnDefinitions="*,Auto"><StackPanel VerticalAlignment="Center"><TextBlock x:Name="SurfaceTitle" Text="ArcCAD" FontSize="15" FontWeight="SemiBold" /><TextBlock x:Name="SurfaceSubtitle" Text="Opciones de interfaz" FontSize="11" Foreground="#818C96" /></StackPanel><Button x:Name="TopSurfaceCloseButton" Grid.Column="1" Width="32" Height="32" Padding="0" Tag="surface.close" Click="OnUiActionClick" AutomationProperties.Name="Cerrar panel"><local:CadToolIcon Tool="Close" Width="15" Height="15" Accent="#AEB7BC" /></Button></Grid></Border>
+      <Border Grid.Row="1" Margin="12,10,12,2" Padding="11,6" Background="#1B2229" BorderBrush="{StaticResource Brush.Palette.Accent}" BorderThickness="2,0,0,0"><TextBlock x:Name="SurfaceStatus" Text="Todo ocurre localmente en esta vista previa." FontSize="11" FontStyle="Italic" Foreground="#92A3AF" TextWrapping="Wrap" /></Border>
+      <ScrollViewer Grid.Row="2" MaxHeight="570" VerticalScrollBarVisibility="Auto"><StackPanel x:Name="SurfaceActionsPanel" Margin="12" Spacing="5" /></ScrollViewer>
+    </Grid>
+  </Border>
+
+  <Border x:Name="ToastPanel" IsVisible="False" MinWidth="300" MaxWidth="620" Height="43" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,155" Background="#202831" BorderBrush="#607F98" BorderThickness="1" CornerRadius="3" ZIndex="140" Padding="15,0"><Grid ColumnDefinitions="Auto,*"><Border Width="6" Height="6" CornerRadius="1" Background="#7896AD" VerticalAlignment="Center" /><TextBlock x:Name="ToastText" Grid.Column="1" Text="No disponible" Margin="10,0,0,0" VerticalAlignment="Center" /></Grid></Border>
+
+  <Grid x:Name="ModalOverlay" IsVisible="False" Background="#B80D1116" ZIndex="200" PointerPressed="OnModalOverlayPointerPressed">
+    <Border x:Name="ModalCard" Width="570" MinHeight="390" MaxHeight="650" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#171E25" BorderBrush="#45515D" BorderThickness="1" CornerRadius="4" ClipToBounds="True" KeyboardNavigation.TabNavigation="Cycle">
+      <Grid RowDefinitions="60,*,64">
+        <Border Background="#202831" BorderBrush="#343F49" BorderThickness="0,0,0,1" Padding="20,0"><Grid ColumnDefinitions="Auto,*,Auto"><Border Width="32" Height="32" CornerRadius="3" Background="#2A3A47" BorderBrush="#607F98" BorderThickness="1"><Grid><TextBlock x:Name="ModalGlyph" Text="A" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" /><local:CadToolIcon x:Name="ModalGlyphIcon" IsVisible="False" Tool="Settings" Width="19" Height="19" HorizontalAlignment="Center" VerticalAlignment="Center" /></Grid></Border><TextBlock x:Name="ModalTitle" Grid.Column="1" Text="Vista previa" FontSize="16" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" /><Button Grid.Column="2" Width="34" Height="34" Padding="0" Tag="modal.cancel" Click="OnModalCancelClick" AutomationProperties.Name="Cerrar diálogo"><local:CadToolIcon Tool="Close" Width="15" Height="15" Accent="#AEB7BC" /></Button></Grid></Border>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,20" Spacing="16"><TextBlock x:Name="ModalBody" Text="Contenido de la vista previa." FontSize="13" Foreground="#C7D2E0" TextWrapping="Wrap" LineHeight="20" /><StackPanel x:Name="ModalDynamicFields" IsVisible="False" Spacing="10" /><Border x:Name="ModalPreviewCard" MinHeight="190" Background="#11171D" BorderBrush="#343F49" BorderThickness="1" CornerRadius="3" Padding="18"><Grid RowDefinitions="Auto,*,Auto"><TextBlock x:Name="ModalPreviewHeading" Text="PREVISUALIZACIÓN DE INTERFAZ" FontSize="11" Foreground="#7896AD" FontWeight="SemiBold" /><Border x:Name="ModalPreviewPaper" Grid.Row="1" Margin="0,14" Background="#EDF2F7" CornerRadius="3" Width="180" Height="135" HorizontalAlignment="Center"><Grid><Border Margin="14" BorderBrush="#8EA0B3" BorderThickness="1" /><TextBlock x:Name="ModalPreviewPaperLabel" Text="ArcCAD" Foreground="#203246" FontSize="13" FontWeight="SemiBold" LineHeight="17" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" /></Grid></Border><TextBlock x:Name="ModalPreviewCaption" Grid.Row="2" Text="No se ha escrito ningún archivo ni se ha llamado al motor." FontSize="11" Foreground="#8FA2B8" TextAlignment="Center" /></Grid></Border></StackPanel></ScrollViewer>
+        <Border Grid.Row="2" Background="#151B21" BorderBrush="#343F49" BorderThickness="0,1,0,0" Padding="18,0"><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="9"><Button x:Name="ModalSecondaryButton" Classes="modalSecondary" Width="112" Height="36" Content="Cancelar" Tag="modal.cancel" Click="OnModalCancelClick" AutomationProperties.Name="Cancelar" /><Button x:Name="ModalApplyButton" Classes="modalSecondary" IsVisible="False" Width="112" Height="36" Content="Aplicar" Tag="modal.apply" Click="OnModalApplyClick" AutomationProperties.Name="Aplicar" /><Button x:Name="ModalPrimaryButton" Classes="primary" Width="132" Height="36" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="Entendido" Tag="modal.confirm" Click="OnModalConfirmClick" AutomationProperties.Name="Confirmar" /></StackPanel></Border>
+      </Grid>
+    </Border>
+  </Grid>
+  </Grid>
+</Window>
