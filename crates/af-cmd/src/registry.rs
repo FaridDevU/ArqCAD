@@ -5,25 +5,21 @@
 //! Case-insensitive name or alias collisions are [`RegisterError`] values rather
 //! than last-definition-wins replacements.
 //!
-//! Runtime user/PGP aliases loaded through
-//! [`CommandRegistry::apply_user_aliases`] may replace built-in aliases, but never
-//! canonical command names.
+//! Runtime PGP aliases are published from four validated layers in one swap.
 
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use af_model::Session;
 use af_model::entity::EntityGeometry;
 use serde_json::Value;
 
 use crate::args::validate_args;
+use crate::pgp::{
+    PgpEdit, PgpEditError, PgpError, PgpLayer, PgpParse, normalize_token, parse_pgp_layer_prefix,
+    prepare_edit, write_atomic,
+};
 use crate::spec::{CmdError, CommandCtx, CommandOutcome, CommandSpec};
-
-/// Shared caseless normalization for command names and aliases. Uppercasing before
-/// lowercasing preserves equivalence for Unicode expansions such as `ß` to `SS`
-/// and contextual forms such as final sigma.
-fn normalize_token(token: &str) -> String {
-    token.trim().to_uppercase().to_lowercase()
-}
 
 /// An error raised while registering a command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,7 +57,7 @@ impl std::error::Error for RegisterError {}
 /// The first matching layer wins:
 ///
 /// 1. **Canonical name** (`canonical`), which aliases can never shadow.
-/// 2. **User/PGP alias** (`user_aliases`), which may replace a built-in alias.
+/// 2. **Effective PGP alias** (`pgp_aliases`), with session-to-system precedence.
 /// 3. **Built-in alias** (`index`), declared through `CommandSpec::alias`.
 ///
 /// `index` also stores canonical names so registration detects all collisions in
@@ -73,8 +69,8 @@ pub struct CommandRegistry {
     index: HashMap<String, usize>,
     /// Normalized canonical name to index in `specs`.
     canonical: HashMap<String, usize>,
-    /// Normalized user/PGP alias to index in `specs`.
-    user_aliases: HashMap<String, usize>,
+    /// Normalized effective PGP alias to index in `specs`.
+    pgp_aliases: HashMap<String, usize>,
 }
 
 impl CommandRegistry {
@@ -135,7 +131,7 @@ impl CommandRegistry {
         let key = normalize_token(name);
         self.canonical
             .get(&key)
-            .or_else(|| self.user_aliases.get(&key))
+            .or_else(|| self.pgp_aliases.get(&key))
             .or_else(|| self.index.get(&key))
             .copied()
     }
@@ -152,111 +148,112 @@ impl CommandRegistry {
         self.lookup(name).map(|spec| spec.name())
     }
 
-    /// Returns the number of active user/PGP aliases.
+    /// Returns the number of active aliases after layer precedence.
     #[must_use]
-    pub fn user_alias_count(&self) -> usize {
-        self.user_aliases.len()
+    pub fn pgp_alias_count(&self) -> usize {
+        self.pgp_aliases.len()
     }
 
-    /// Applies runtime aliases between canonical names and built-in aliases in
-    /// lookup precedence.
+    /// Parses, validates, and publishes all four layers in one fail-closed swap.
     ///
-    /// For each `(alias, target)` pair:
-    /// - Empty aliases are skipped with a warning.
-    /// - Aliases matching canonical names are skipped with a warning.
-    /// - Unknown targets are skipped with a warning.
-    /// - Valid aliases replace earlier entries using last-definition-wins semantics.
-    ///
-    /// Valid pairs are applied even when other pairs produce warnings.
-    pub fn apply_user_aliases<I, A, T>(&mut self, pairs: I) -> Vec<String>
-    where
-        I: IntoIterator<Item = (A, T)>,
-        A: AsRef<str>,
-        T: AsRef<str>,
-    {
-        let mut warnings = Vec::new();
-        for (alias, target) in pairs {
-            let alias = alias.as_ref();
-            let target = target.as_ref();
-            let key = normalize_token(alias);
+    /// # Errors
+    /// Returns the first stable layer/line diagnostic. The prior table is retained.
+    pub fn replace_pgp_layers(
+        &mut self,
+        system: &str,
+        user: &str,
+        project: &str,
+        session: &str,
+    ) -> Result<Vec<String>, PgpError> {
+        let contents = [system, user, project, session];
+        let parsed: Vec<(PgpLayer, PgpParse, Option<PgpError>)> = PgpLayer::ALL
+            .into_iter()
+            .zip(contents)
+            .map(|(layer, content)| {
+                let (parsed, error) = parse_pgp_layer_prefix(layer, content);
+                (layer, parsed, error)
+            })
+            .collect();
+        let (candidate, diagnostics) = self.validate_pgp_layers(&parsed)?;
+        self.pgp_aliases = candidate;
+        Ok(diagnostics)
+    }
 
-            if key.is_empty() {
-                warnings.push(format!(
-                    "alias de usuario vacío ignorado (destino '{target}')"
-                ));
-                continue;
-            }
-            if self.canonical.contains_key(&key) {
-                warnings.push(format!(
-                    "alias de usuario '{alias}' ignorado: coincide con el nombre canónico de un comando ya registrado"
-                ));
-                continue;
-            }
-            match self.lookup_index(target) {
-                Some(idx) => {
-                    self.user_aliases.insert(key, idx);
-                }
-                None => {
-                    warnings.push(format!(
-                        "alias de usuario '{alias}' -> '{target}' ignorado: comando destino desconocido"
+    /// Atomically edits an existing UTF-8 PGP file after syntax and target validation.
+    ///
+    /// This Rust-only API never crosses JSON/FFI. Any error leaves the destination
+    /// byte-identical; the returned strings are nonfatal builtin-shadow diagnostics.
+    ///
+    /// # Errors
+    /// Returns strict parse, semantic, edit-precondition, or I/O errors.
+    pub fn edit_pgp_file(
+        &self,
+        path: &Path,
+        layer: PgpLayer,
+        edit: PgpEdit<'_>,
+    ) -> Result<Vec<String>, PgpEditError> {
+        let (bytes, diagnostics) = prepare_edit(path, layer, edit, |content| {
+            let (parsed, error) = parse_pgp_layer_prefix(layer, content);
+            self.validate_pgp_layers(&[(layer, parsed, error)])
+                .map(|(_, diagnostics)| diagnostics)
+        })?;
+        write_atomic(path, &bytes)?;
+        Ok(diagnostics)
+    }
+
+    fn validate_pgp_layers(
+        &self,
+        layers: &[(PgpLayer, PgpParse, Option<PgpError>)],
+    ) -> Result<(HashMap<String, usize>, Vec<String>), PgpError> {
+        let all_aliases: HashSet<String> = layers
+            .iter()
+            .flat_map(|(_, parsed, _)| parsed.aliases.iter())
+            .map(|(alias, _)| normalize_token(alias))
+            .collect();
+        let mut candidate = HashMap::new();
+        let mut owners = HashMap::<String, PgpLayer>::new();
+        let mut diagnostics = Vec::new();
+
+        for (layer, parsed, syntax_error) in layers {
+            for ((alias, target), line) in parsed.aliases.iter().zip(&parsed.lines) {
+                let key = normalize_token(alias);
+                if self.canonical.contains_key(&key) {
+                    return Err(PgpError::new(
+                        *layer,
+                        *line,
+                        format!("alias '{alias}' sombrea comando canonico"),
                     ));
                 }
-            }
-        }
-        warnings
-    }
 
-    /// Replaces the entire user-alias table in one swap.
-    ///
-    /// Pairs are validated against an initially empty candidate table, so aliases
-    /// absent from `pairs` are removed. Validation and precedence match
-    /// [`apply_user_aliases`](Self::apply_user_aliases).
-    pub fn replace_user_aliases<I, A, T>(&mut self, pairs: I) -> Vec<String>
-    where
-        I: IntoIterator<Item = (A, T)>,
-        A: AsRef<str>,
-        T: AsRef<str>,
-    {
-        let mut candidate = HashMap::new();
-        let mut warnings = Vec::new();
+                let target_key = normalize_token(target);
+                let Some(&target_index) = self.canonical.get(&target_key) else {
+                    let cause = if all_aliases.contains(&target_key)
+                        || self.index.contains_key(&target_key)
+                    {
+                        format!("target '{target}' es alias/no canonico")
+                    } else {
+                        format!("target '{target}' desconocido")
+                    };
+                    return Err(PgpError::new(*layer, *line, cause));
+                };
 
-        for (alias, target) in pairs {
-            let alias = alias.as_ref();
-            let target = target.as_ref();
-            let key = normalize_token(alias);
-
-            if key.is_empty() {
-                warnings.push(format!(
-                    "alias de usuario vacío ignorado (destino '{target}')"
-                ));
-                continue;
-            }
-            if self.canonical.contains_key(&key) {
-                warnings.push(format!(
-                    "alias de usuario '{alias}' ignorado: coincide con el nombre canónico de un comando ya registrado"
-                ));
-                continue;
-            }
-
-            let target_key = normalize_token(target);
-            match self
-                .canonical
-                .get(&target_key)
-                .or_else(|| candidate.get(&target_key))
-                .or_else(|| self.index.get(&target_key))
-                .copied()
-            {
-                Some(idx) => {
-                    candidate.insert(key, idx);
+                if self.index.contains_key(&key) {
+                    diagnostics.push(format!(
+                        "PGP {layer} linea {line}: alias '{alias}' reemplaza builtin"
+                    ));
                 }
-                None => warnings.push(format!(
-                    "alias de usuario '{alias}' -> '{target}' ignorado: comando destino desconocido"
-                )),
+                if let Some(previous) = owners.insert(key.clone(), *layer) {
+                    diagnostics.push(format!(
+                        "PGP {layer} linea {line}: alias '{alias}' reemplaza capa {previous}"
+                    ));
+                }
+                candidate.insert(key, target_index);
+            }
+            if let Some(error) = syntax_error {
+                return Err(error.clone());
             }
         }
-
-        self.user_aliases = candidate;
-        warnings
+        Ok((candidate, diagnostics))
     }
 
     /// Returns all commands in registration order.

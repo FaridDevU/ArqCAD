@@ -1,167 +1,275 @@
-//! End-to-end PGP parsing, alias-precedence integration, and standard-alias target tests.
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use af_cmd::builtin::register_builtins;
-use af_cmd::{CommandRegistry, parse_pgp, standard_aliases};
+use af_cmd::{
+    CommandRegistry, PgpEdit, PgpEditError, PgpLayer, parse_pgp, parse_pgp_layer, standard_aliases,
+};
 
-/// Project-authored PGP fixture covering comments, shell entries, dashed commands,
-/// and last-definition-wins aliases.
-const FIXTURE: &str = r#"
-; ArcCAD test PGP fixture (not a real acad.pgp file)
-; Native command aliases
-L,*LINE
-C,*CIRCLE
-CO,*COPY
-CP,*COPY
+static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-; Command-line variant (leading hyphen): it is not trimmed.
--B,*-BLOCK
+struct TempDir(PathBuf);
 
-; External shell command: ArcCAD never executes a shell, so this entry is ignored with a warning.
-NOTEPAD,NOTEPAD,0,*Editar archivo externo:,
+impl TempDir {
+    fn new() -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "arccad-p1-006bu-pgp-test-{}-{}",
+            std::process::id(),
+            TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&path).expect("unique test directory");
+        Self(path)
+    }
 
-; "CO" is redefined below; the last entry wins, matching AutoCAD semantics.
-CO,*ROTATE
+    fn join(&self, name: &str) -> PathBuf {
+        self.0.join(name)
+    }
+}
 
-; The blank and malformed lines below are ignored with warnings.
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
 
-SINCOMA
-"#;
-
-#[test]
-fn fixture_parses_expected_aliases_and_warnings() {
-    let parsed = parse_pgp(FIXTURE);
-
-    // A duplicate keeps first-appearance order but uses its last value.
-    assert_eq!(
-        parsed.aliases,
-        vec![
-            ("L".to_string(), "LINE".to_string()),
-            ("C".to_string(), "CIRCLE".to_string()),
-            ("CO".to_string(), "ROTATE".to_string()),
-            ("CP".to_string(), "COPY".to_string()),
-            ("-B".to_string(), "-BLOCK".to_string()),
-        ]
-    );
-
-    assert_eq!(parsed.warnings.len(), 3);
-    assert!(parsed.warnings.iter().any(|w| w.contains("CO")));
-    assert!(
-        parsed
-            .warnings
-            .iter()
-            .any(|w| w.contains("NOTEPAD") && w.contains("shell"))
-    );
-    assert!(parsed.warnings.iter().any(|w| w.contains("SINCOMA")));
+fn registry() -> CommandRegistry {
+    let mut registry = CommandRegistry::new();
+    register_builtins(&mut registry).expect("builtins");
+    registry
 }
 
 #[test]
-fn fixture_applied_to_default_registry_respects_precedence() {
-    let mut reg = CommandRegistry::new();
-    register_builtins(&mut reg).expect("los builtins no colisionan entre sí");
+fn parser_is_strict_and_diagnostics_name_layer_line_and_cause() {
+    let accepted = parse_pgp_layer(
+        PgpLayer::Project,
+        "\u{feff}\r\n  ; comment \r\n  l\u{ed}nea  ,  *  LINE  \n",
+    )
+    .unwrap();
+    assert_eq!(accepted.aliases, [("l\u{ed}nea".into(), "LINE".into())]);
 
-    assert_eq!(reg.lookup("CO").unwrap().name(), "COPY");
-    assert_eq!(reg.lookup("C").unwrap().name(), "CIRCLE");
-
-    let parsed = parse_pgp(FIXTURE);
-    let apply_warnings = reg.apply_user_aliases(parsed.aliases);
-
-    assert_eq!(apply_warnings.len(), 1);
-    assert!(apply_warnings[0].contains("-B"));
-
-    assert_eq!(reg.lookup("CO").unwrap().name(), "ROTATE");
-    assert_eq!(reg.lookup("CP").unwrap().name(), "COPY");
-    assert_eq!(reg.lookup("C").unwrap().name(), "CIRCLE");
-    assert_eq!(reg.lookup("L").unwrap().name(), "LINE");
-    assert_eq!(reg.lookup("COPY").unwrap().name(), "COPY");
-    assert_eq!(reg.lookup("ROTATE").unwrap().name(), "ROTATE");
-    assert!(reg.lookup("-B").is_none());
-}
-
-#[test]
-fn pgp_alias_cannot_shadow_a_canonical_command_name_in_the_real_registry() {
-    let mut reg = CommandRegistry::new();
-    register_builtins(&mut reg).expect("los builtins no colisionan entre sí");
-
-    let parsed = parse_pgp("MOVE,*COPY\n");
-    let warnings = reg.apply_user_aliases(parsed.aliases);
-    assert_eq!(warnings.len(), 1);
-    assert_eq!(reg.lookup("MOVE").unwrap().name(), "MOVE");
-}
-
-#[test]
-fn replacing_pgp_aliases_is_complete_unicode_aware_and_preserves_precedence() {
-    let mut reg = CommandRegistry::new();
-    register_builtins(&mut reg).expect("los builtins no colisionan entre sí");
-
-    let parsed = parse_pgp(
-        "\u{feff}C,*COPY\nlínea,*LINE\nstraße,*LINE\nCIRCLE,*COPY\nHUERFANO,*NO_EXISTE\n",
-    );
-    assert!(parsed.warnings.is_empty());
-    assert!(parsed.aliases.iter().any(|(alias, _)| alias == "LÍNEA"));
-    assert!(parsed.aliases.iter().any(|(alias, _)| alias == "STRASSE"));
-
-    let warnings = reg.replace_user_aliases(parsed.aliases);
-    assert_eq!(warnings.len(), 2);
-    assert!(warnings.iter().any(|warning| warning.contains("CIRCLE")));
-    assert!(
-        warnings
-            .iter()
-            .any(|warning| warning.contains("HUERFANO") && warning.contains("desconocido"))
-    );
-    assert_eq!(reg.user_alias_count(), 3);
-    assert_eq!(reg.resolve_canonical_name("C"), Some("COPY"));
-    assert_eq!(reg.resolve_canonical_name("línea"), Some("LINE"));
-    assert_eq!(reg.resolve_canonical_name("straße"), Some("LINE"));
-    assert_eq!(reg.resolve_canonical_name("CIRCLE"), Some("CIRCLE"));
-
-    let warnings = reg.replace_user_aliases([("MOVER", "MOVE")]);
-    assert!(warnings.is_empty());
-    assert_eq!(reg.user_alias_count(), 1);
-    assert_eq!(reg.resolve_canonical_name("C"), Some("CIRCLE"));
-    assert_eq!(reg.resolve_canonical_name("línea"), None);
-    assert_eq!(reg.resolve_canonical_name("straße"), None);
-    assert_eq!(reg.resolve_canonical_name("MOVER"), Some("MOVE"));
-}
-
-// ---- standard_aliases() target validity -------------------------------------
-
-#[test]
-fn standard_aliases_targets_exist_in_default_registry() {
-    let mut reg = CommandRegistry::new();
-    register_builtins(&mut reg).expect("los builtins no colisionan entre sí");
-
-    for (alias, target) in standard_aliases() {
-        let spec = reg.lookup(target).unwrap_or_else(|| {
-            panic!(
-                "standard_aliases(): el destino '{target}' (alias '{alias}') no existe en el registry por defecto"
-            )
-        });
-        // Every table target must be canonical rather than another alias.
-        assert_eq!(
-            spec.name(),
-            *target,
-            "standard_aliases(): el destino '{target}' no es el nombre canónico de ningún comando (resolvió a '{}')",
-            spec.name()
-        );
+    for (content, line, cause) in [
+        ("A,*LINE,extra", 1, "exactamente una coma"),
+        ("A,LINE", 1, "shell"),
+        ("A,*", 1, "comando vacio"),
+        (",*LINE", 1, "alias vacio"),
+        ("; ok\nA,*LINE ; no", 2, "inline"),
+        ("A,*LINE\rB,*LINE", 1, "CR desnudo"),
+        ("A,*LINE\n\u{feff}B,*LINE", 2, "BOM"),
+        ("A,*LINE\na,*MOVE", 2, "duplicado"),
+    ] {
+        let error = parse_pgp_layer(PgpLayer::Project, content).unwrap_err();
+        assert_eq!(error.layer, PgpLayer::Project);
+        assert_eq!(error.line, line);
+        assert!(error.cause.contains(cause), "{error}");
+        assert!(error.to_string().starts_with("PGP project linea "));
     }
 }
 
 #[test]
-fn standard_aliases_can_be_applied_to_the_default_registry_without_warnings() {
-    let mut reg = CommandRegistry::new();
-    register_builtins(&mut reg).expect("los builtins no colisionan entre sí");
+fn parser_reports_the_first_line_before_a_later_bare_cr() {
+    let error = parse_pgp("BROKEN\nA,*LINE\rB,*MOVE").unwrap_err();
+    assert_eq!(error.layer, PgpLayer::User);
+    assert_eq!(error.line, 1);
+    assert_eq!(error.cause, "fila activa requiere exactamente una coma");
 
-    let warnings = reg.apply_user_aliases(
-        standard_aliases()
-            .iter()
-            .map(|(alias, target)| (*alias, *target)),
+    let error = parse_pgp("A,*LINE\nB,*MOVE\rC,*COPY").unwrap_err();
+    assert_eq!(error.layer, PgpLayer::User);
+    assert_eq!(error.line, 2);
+    assert_eq!(error.cause, "CR desnudo no permitido");
+}
+
+#[test]
+fn case_key_is_locale_independent_but_does_not_normalize_unicode() {
+    assert!(parse_pgp("stra\u{df}e,*LINE\nSTRASSE,*MOVE").is_err());
+    let parsed = parse_pgp("\u{e9},*LINE\ne\u{301},*MOVE").unwrap();
+    assert_eq!(parsed.aliases.len(), 2);
+
+    let mut registry = registry();
+    registry
+        .replace_pgp_layers("", "\u{e9},*LINE\ne\u{301},*MOVE", "", "")
+        .unwrap();
+    assert_eq!(registry.resolve_canonical_name("\u{c9}"), Some("LINE"));
+    assert_eq!(registry.resolve_canonical_name("E\u{301}"), Some("MOVE"));
+}
+
+#[test]
+fn editor_preserves_bom_untouched_bytes_and_mixed_endings() {
+    let temp = TempDir::new();
+    let path = temp.join("aliases.pgp");
+    let sentinel = temp.join("sentinel.tmp");
+    let original = "\u{feff}; head\r\n  Alfa  ,  *  LINE  \n; keep\r\nB,*CIRCLE";
+    fs::write(&path, original.as_bytes()).unwrap();
+    fs::write(&sentinel, b"do not touch").unwrap();
+    let registry = registry();
+
+    registry
+        .edit_pgp_file(
+            &path,
+            PgpLayer::User,
+            PgpEdit::Update {
+                alias: "ALFA",
+                target: "MOVE",
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        "\u{feff}; head\r\n  Alfa  ,  *  MOVE  \n; keep\r\nB,*CIRCLE".as_bytes()
+    );
+
+    registry
+        .edit_pgp_file(
+            &path,
+            PgpLayer::User,
+            PgpEdit::Add {
+                alias: "NUEVO",
+                target: "COPY",
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        "\u{feff}; head\r\n  Alfa  ,  *  MOVE  \n; keep\r\nB,*CIRCLE\r\nNUEVO,*COPY".as_bytes()
+    );
+
+    registry
+        .edit_pgp_file(&path, PgpLayer::User, PgpEdit::Delete { alias: "b" })
+        .unwrap();
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        "\u{feff}; head\r\n  Alfa  ,  *  MOVE  \n; keep\r\nNUEVO,*COPY".as_bytes()
+    );
+    assert_eq!(fs::read(&sentinel).unwrap(), b"do not touch");
+    assert_no_editor_temps(&temp.0, &path);
+}
+
+fn assert_no_editor_temps(directory: &Path, destination: &Path) {
+    let prefix = format!(
+        ".{}.arccad-",
+        destination.file_name().unwrap().to_string_lossy()
     );
     assert!(
-        warnings.is_empty(),
-        "standard_aliases() no debería generar warnings contra el registry por defecto: {warnings:?}"
+        fs::read_dir(directory)
+            .unwrap()
+            .filter_map(Result::ok)
+            .all(|entry| !entry.file_name().to_string_lossy().starts_with(&prefix))
     );
+}
 
-    assert_eq!(reg.lookup("L").unwrap().name(), "LINE");
-    assert_eq!(reg.lookup("c").unwrap().name(), "CIRCLE");
-    assert_eq!(reg.lookup("UN").unwrap().name(), "UNITS");
+#[test]
+fn editor_preconditions_and_invalid_candidates_are_fail_closed() {
+    let temp = TempDir::new();
+    let path = temp.join("aliases.pgp");
+    let registry = registry();
+    fs::write(&path, b"A1,*LINE\n").unwrap();
+    let original = fs::read(&path).unwrap();
+
+    let cases = [
+        PgpEdit::Add {
+            alias: "a1",
+            target: "MOVE",
+        },
+        PgpEdit::Update {
+            alias: "MISSING",
+            target: "MOVE",
+        },
+        PgpEdit::Delete { alias: "MISSING" },
+        PgpEdit::Update {
+            alias: "A1",
+            target: "NO_SUCH_COMMAND",
+        },
+        PgpEdit::Update {
+            alias: "A1",
+            target: "L",
+        },
+    ];
+    for edit in cases {
+        assert!(registry.edit_pgp_file(&path, PgpLayer::User, edit).is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_no_editor_temps(&temp.0, &path);
+    }
+
+    fs::write(&path, b"bad row").unwrap();
+    let invalid = fs::read(&path).unwrap();
+    assert!(matches!(
+        registry.edit_pgp_file(
+            &path,
+            PgpLayer::User,
+            PgpEdit::Add {
+                alias: "B",
+                target: "LINE"
+            }
+        ),
+        Err(PgpEditError::Invalid(_))
+    ));
+    assert_eq!(fs::read(&path).unwrap(), invalid);
+}
+
+#[test]
+fn editor_reports_semantic_prefix_before_later_syntax_without_writing() {
+    let temp = TempDir::new();
+    let path = temp.join("aliases.pgp");
+    let original = b"LINE,*MOVE\nBROKEN";
+    fs::write(&path, original).unwrap();
+    let registry = registry();
+
+    for edit in [
+        PgpEdit::Add {
+            alias: "NEW",
+            target: "LINE",
+        },
+        PgpEdit::Update {
+            alias: "LINE",
+            target: "CIRCLE",
+        },
+        PgpEdit::Delete { alias: "LINE" },
+    ] {
+        let PgpEditError::Invalid(error) = registry
+            .edit_pgp_file(&path, PgpLayer::System, edit)
+            .unwrap_err()
+        else {
+            panic!("expected semantic PGP error");
+        };
+        assert_eq!(error.layer, PgpLayer::System);
+        assert_eq!(error.line, 1);
+        assert_eq!(error.cause, "alias 'LINE' sombrea comando canonico");
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_no_editor_temps(&temp.0, &path);
+    }
+}
+
+#[test]
+fn editor_uses_lf_without_existing_terminator_and_reports_builtin_shadow() {
+    let temp = TempDir::new();
+    let path = temp.join("aliases.pgp");
+    fs::write(&path, b"FIRST,*LINE").unwrap();
+    let registry = registry();
+    let diagnostics = registry
+        .edit_pgp_file(
+            &path,
+            PgpLayer::Session,
+            PgpEdit::Add {
+                alias: "C",
+                target: "MOVE",
+            },
+        )
+        .unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"FIRST,*LINE\nC,*MOVE");
+    assert_eq!(
+        diagnostics,
+        ["PGP session linea 2: alias 'C' reemplaza builtin"]
+    );
+}
+
+#[test]
+fn every_standard_alias_target_is_canonical() {
+    let registry = registry();
+    for (alias, target) in standard_aliases() {
+        assert_eq!(
+            registry.resolve_canonical_name(target),
+            Some(*target),
+            "{alias} -> {target} must be canonical"
+        );
+    }
 }

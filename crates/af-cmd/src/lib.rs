@@ -12,9 +12,8 @@
 //!   the one-transaction contract.
 //! - [`parse_input`] parses command-line input without parser dependencies. A
 //!   comma always separates coordinates and is never a decimal separator.
-//! - [`parse_pgp`] and [`standard_aliases`] provide `acad.pgp` interoperability;
-//!   aliases are applied through
-//!   [`CommandRegistry::apply_user_aliases`].
+//! - [`parse_pgp`], [`PgpLayer`], and [`PgpEdit`] provide strict layered PGP
+//!   loading and atomic Rust-only editing.
 //! - [`builtin`] contains the commands implemented by this crate.
 //!
 //! # Transaction invariant
@@ -38,7 +37,10 @@ pub mod builtin;
 
 pub use args::{ArgValue, ParsedArgs};
 pub use parse::{ParseError, ParsedInput, parse_input};
-pub use pgp::{PgpParse, parse_pgp, standard_aliases};
+pub use pgp::{
+    PgpEdit, PgpEditError, PgpError, PgpLayer, PgpParse, parse_pgp, parse_pgp_layer,
+    standard_aliases,
+};
 pub use registry::{CommandRegistry, RegisterError};
 pub use spec::{
     CmdError, CommandCtx, CommandFn, CommandOutcome, CommandSpec, ParamSpec, ParamType,

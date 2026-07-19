@@ -19,7 +19,7 @@ use std::io::Cursor;
 use serde::Serialize;
 use serde_json::Value;
 
-use af_cmd::{CommandRegistry, ParamType, builtin, parse_pgp};
+use af_cmd::{CommandRegistry, ParamType, builtin};
 use af_geom::flatten::{flatten_arc, flatten_circle, flatten_ellipse};
 use af_math::{BBox, Point2};
 use af_model::container::ContainerRef;
@@ -67,6 +67,34 @@ fn pgp_admin_string_arg<'a>(
                 format!("{operation} requires exactly one string field '{key}'"),
             )
         })
+}
+
+fn pgp_admin_sources(args: &Value) -> Result<[&str; 4], ApiError> {
+    let fields = args
+        .as_object()
+        .ok_or_else(|| ApiError::new("invalid_args", "__ARCFORGE_PGP_REINIT requires an object"))?;
+    if fields.len() == 1
+        && let Some(content) = fields.get("pgp").and_then(Value::as_str)
+    {
+        return Ok(["", content, "", ""]);
+    }
+    if fields.len() == 4
+        && fields
+            .keys()
+            .all(|key| matches!(key.as_str(), "system" | "user" | "project" | "session"))
+        && let (Some(system), Some(user), Some(project), Some(session)) = (
+            fields.get("system").and_then(Value::as_str),
+            fields.get("user").and_then(Value::as_str),
+            fields.get("project").and_then(Value::as_str),
+            fields.get("session").and_then(Value::as_str),
+        )
+    {
+        return Ok([system, user, project, session]);
+    }
+    Err(ApiError::new(
+        "invalid_args",
+        "__ARCFORGE_PGP_REINIT requires exactly {'pgp': string} or the four string fields 'system', 'user', 'project', 'session'",
+    ))
 }
 
 /// Stateful facade used by the UI and plugins.
@@ -168,12 +196,13 @@ impl ApiSession {
     /// Replaces the PGP table without touching document, history, render,
     /// selection, or events. The existing JSON envelope avoids a new ABI export.
     fn reinitialize_pgp(&mut self, args: &Value) -> Result<ExecuteResult, ApiError> {
-        let content = pgp_admin_string_arg(args, "pgp", "__ARCFORGE_PGP_REINIT")?;
-        let parsed = parse_pgp(content);
-        let mut warnings = parsed.warnings;
-        warnings.extend(self.registry.replace_user_aliases(parsed.aliases));
+        let [system, user, project, session] = pgp_admin_sources(args)?;
+        let warnings = self
+            .registry
+            .replace_pgp_layers(system, user, project, session)
+            .map_err(|error| ApiError::new("invalid_pgp", error.to_string()))?;
 
-        let count = self.registry.user_alias_count();
+        let count = self.registry.pgp_alias_count();
         let mut message = format!("PGP: {count} alias(es) activo(s)");
         if !warnings.is_empty() {
             message.push_str("\nwarnings:\n");
@@ -1208,46 +1237,127 @@ mod pgp_aliases {
     }
 
     #[test]
-    fn malformed_reinit_keeps_the_previous_table() {
+    fn legacy_and_exact_top_level_layers_share_one_precedence_table() {
         let mut session = ApiSession::new(Units::default());
-        reinit(&mut session, "KEEP,*LINE\n");
+        reinit(&mut session, "LEGACY,*LINE\n");
+        assert_eq!(resolve(&mut session, "LEGACY").as_deref(), Some("LINE"));
 
-        let error = session
+        let admin = session
             .execute(
                 "__ARCFORGE_PGP_REINIT",
-                &json!({ "pgp": "NEW,*LINE", "extra": true }),
+                &json!({
+                    "system": "XKEY,*LINE\nC,*MOVE",
+                    "user": "XKEY,*CIRCLE",
+                    "project": "XKEY,*COPY",
+                    "session": "XKEY,*MOVE"
+                }),
             )
-            .expect_err("extra fields must be rejected");
-        assert_eq!(error.code, "invalid_args");
-        assert_eq!(resolve(&mut session, "KEEP").as_deref(), Some("LINE"));
-        assert_eq!(resolve(&mut session, "NEW"), None);
+            .unwrap();
+        assert_eq!(resolve(&mut session, "XKEY").as_deref(), Some("MOVE"));
+        assert_eq!(resolve(&mut session, "C").as_deref(), Some("MOVE"));
+        assert_eq!(resolve(&mut session, "CIRCLE").as_deref(), Some("CIRCLE"));
+        assert_eq!(resolve(&mut session, "LEGACY"), None);
+        assert!(admin.message.as_deref().is_some_and(|m| {
+            m.contains("PGP: 2 alias(es)")
+                && m.contains("PGP system linea 2")
+                && m.contains("reemplaza capa project")
+        }));
+
+        reinit(&mut session, "ONLY,*COPY");
+        assert_eq!(resolve(&mut session, "ONLY").as_deref(), Some("COPY"));
+        assert_eq!(resolve(&mut session, "XKEY"), None);
+        assert_eq!(resolve(&mut session, "C").as_deref(), Some("CIRCLE"));
+        assert!(session.poll_events().is_empty());
+    }
+
+    #[test]
+    fn invalid_envelopes_and_invalid_pgp_keep_every_previous_state() {
+        let mut session = ApiSession::new(Units::default());
+        let first = session
+            .execute("LINE", &json!({"p1": [0, 0], "p2": [2, 0]}))
+            .unwrap()
+            .created[0];
+        session
+            .execute("LINE", &json!({"p1": [0, 1], "p2": [2, 1]}))
+            .unwrap();
+        session.poll_events();
+        session.render_full();
+        session.execute("UNDO", &Value::Null).unwrap();
+        session.set_selection(&[first]);
+
+        let snapshot = |session: &ApiSession| {
+            json!({
+                "document": session.save().unwrap(),
+                "info": session.doc_info(),
+                "selection": session.selection(),
+                "index": session.index.ids().iter().map(|id| id.raw().0).collect::<Vec<_>>(),
+                "render": view_from_model(&session.render),
+                "renderSeen": view_from_model(&session.render_seen),
+                "events": &session.events,
+            })
+        };
+        let before = snapshot(&session);
+        reinit(&mut session, "KEEP,*LINE\n");
+        assert_eq!(snapshot(&session), before);
+
+        for bad in [
+            json!({"pgp": "NEW,*LINE", "extra": true}),
+            json!({"system": "", "user": "", "project": ""}),
+            json!({"system": "", "user": "", "project": "", "session": "", "extra": ""}),
+            json!({"pgp": {"system": "", "user": "", "project": "", "session": ""}}),
+            json!({"system": "", "user": 7, "project": "", "session": ""}),
+        ] {
+            let error = session
+                .execute("__ARCFORGE_PGP_REINIT", &bad)
+                .expect_err("invalid envelope");
+            assert_eq!(error.code, "invalid_args");
+            assert_eq!(resolve(&mut session, "KEEP").as_deref(), Some("LINE"));
+        }
+
+        for (content, line, cause) in [
+            ("NEW,*LINE\nBROKEN", 2, "exactamente una coma"),
+            ("LINE,*CIRCLE", 1, "canonico"),
+            ("NEW,*L", 1, "alias/no canonico"),
+            ("NEW,*NOPE", 1, "desconocido"),
+        ] {
+            let error = session
+                .execute(
+                    "__ARCFORGE_PGP_REINIT",
+                    &json!({"system": "", "user": content, "project": "", "session": ""}),
+                )
+                .expect_err("invalid PGP");
+            assert_eq!(error.code, "invalid_pgp");
+            assert!(error.message.contains(&format!("PGP user linea {line}")));
+            assert!(error.message.contains(cause));
+            assert_eq!(resolve(&mut session, "KEEP").as_deref(), Some("LINE"));
+            assert_eq!(resolve(&mut session, "NEW"), None);
+        }
+
+        assert_eq!(snapshot(&session), before);
 
         let malformed_json = session.execute_json("__ARCFORGE_PGP_REINIT", r#"{"pgp":7}"#);
         let envelope: Value = serde_json::from_str(&malformed_json).expect("error envelope");
         assert_eq!(envelope["error"]["code"], "invalid_args");
         assert_eq!(resolve(&mut session, "KEEP").as_deref(), Some("LINE"));
-        assert_eq!(session.doc_info().entity_count, 0);
-        assert!(session.poll_events().is_empty());
+        assert_eq!(snapshot(&session), before);
+
+        session.execute("REDO", &Value::Null).unwrap();
+        assert_eq!(session.doc_info().entity_count, 2);
+        assert_eq!(session.selection(), vec![first]);
     }
 
     #[test]
-    fn resolve_obeys_canonical_user_and_builtin_precedence() {
-        let mut session = ApiSession::new(Units::default());
-        let admin = reinit(
-            &mut session,
-            "C,*COPY\nCIRCLE,*LINE\nBROKEN,*NO_SUCH_COMMAND\n",
-        );
+    fn registries_are_isolated_per_api_session() {
+        let mut first = ApiSession::new(Units::default());
+        let mut second = ApiSession::new(Units::default());
+        reinit(&mut first, "LOCAL,*LINE");
+        reinit(&mut second, "LOCAL,*MOVE");
+        assert_eq!(resolve(&mut first, "LOCAL").as_deref(), Some("LINE"));
+        assert_eq!(resolve(&mut second, "LOCAL").as_deref(), Some("MOVE"));
 
-        assert_eq!(resolve(&mut session, "C").as_deref(), Some("COPY"));
-        assert_eq!(resolve(&mut session, "CIRCLE").as_deref(), Some("CIRCLE"));
-        assert_eq!(resolve(&mut session, "BROKEN"), None);
-        assert!(
-            admin
-                .message
-                .as_deref()
-                .is_some_and(|m| m.contains("warnings"))
-        );
-        assert!(session.poll_events().is_empty());
+        reinit(&mut first, "OTHER,*COPY");
+        assert_eq!(resolve(&mut first, "LOCAL"), None);
+        assert_eq!(resolve(&mut second, "LOCAL").as_deref(), Some("MOVE"));
     }
 }
 

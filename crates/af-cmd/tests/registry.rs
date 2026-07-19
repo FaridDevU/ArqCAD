@@ -165,91 +165,131 @@ fn lookup_is_case_insensitive_and_trims() {
     assert_eq!(reg.lookup("c").unwrap().name(), "CIRCLE");
 }
 
-// ---- apply_user_aliases precedence ------------------------------------------
+// ---- strict layered PGP precedence -----------------------------------------
 
 #[test]
-fn user_alias_overrides_builtin_alias_but_not_canonical_names() {
+fn pgp_layers_replace_in_order_and_lookup_keeps_canonical_first() {
     let mut reg = CommandRegistry::new();
     reg.register(CommandSpec::new("CIRCLE", "Circle", false, nop_exec).alias("C"))
         .unwrap();
     reg.register(CommandSpec::new("LINE", "Line", false, nop_exec).alias("L"))
         .unwrap();
+    reg.register(CommandSpec::new("COPY", "Copy", false, nop_exec))
+        .unwrap();
+    reg.register(CommandSpec::new("MOVE", "Move", false, nop_exec))
+        .unwrap();
 
-    assert_eq!(reg.lookup("C").unwrap().name(), "CIRCLE");
-
-    let warnings = reg.apply_user_aliases([("C".to_string(), "LINE".to_string())]);
-    assert!(warnings.is_empty());
-    assert_eq!(reg.lookup("C").unwrap().name(), "LINE");
-    assert_eq!(reg.lookup("c").unwrap().name(), "LINE"); // Lookup remains case-insensitive.
-
-    assert_eq!(reg.lookup("CIRCLE").unwrap().name(), "CIRCLE");
-    assert_eq!(reg.lookup("LINE").unwrap().name(), "LINE");
-    assert_eq!(reg.lookup("L").unwrap().name(), "LINE");
+    let diagnostics = reg
+        .replace_pgp_layers(
+            "XKEY,*LINE\nC,*MOVE",
+            "XKEY,*CIRCLE",
+            "XKEY,*COPY",
+            "XKEY,*MOVE",
+        )
+        .unwrap();
+    assert_eq!(reg.pgp_alias_count(), 2);
+    assert_eq!(reg.resolve_canonical_name("XKEY"), Some("MOVE"));
+    assert_eq!(reg.resolve_canonical_name("C"), Some("MOVE"));
+    assert_eq!(reg.resolve_canonical_name("CIRCLE"), Some("CIRCLE"));
+    assert_eq!(reg.resolve_canonical_name("L"), Some("LINE"));
+    assert_eq!(
+        diagnostics,
+        [
+            "PGP system linea 2: alias 'C' reemplaza builtin",
+            "PGP user linea 1: alias 'XKEY' reemplaza capa system",
+            "PGP project linea 1: alias 'XKEY' reemplaza capa user",
+            "PGP session linea 1: alias 'XKEY' reemplaza capa project",
+        ]
+    );
 }
 
 #[test]
-fn user_alias_cannot_shadow_a_canonical_command_name() {
+fn every_fatal_validation_keeps_the_previous_table() {
     let mut reg = CommandRegistry::new();
-    reg.register(CommandSpec::new("CIRCLE", "Circle", false, nop_exec))
+    reg.register(CommandSpec::new("CIRCLE", "Circle", false, nop_exec).alias("C"))
         .unwrap();
-    reg.register(CommandSpec::new("LINE", "Line", false, nop_exec))
+    reg.register(CommandSpec::new("LINE", "Line", false, nop_exec).alias("L"))
         .unwrap();
+    reg.register(CommandSpec::new("MOVE", "Move", false, nop_exec))
+        .unwrap();
+    reg.replace_pgp_layers("", "KEEP,*LINE", "", "").unwrap();
 
-    let warnings = reg.apply_user_aliases([("LINE".to_string(), "CIRCLE".to_string())]);
-    assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].contains("canónico") || warnings[0].contains("canonico"));
-    assert_eq!(reg.lookup("LINE").unwrap().name(), "LINE");
+    for (layers, expected_layer, expected_line, cause) in [
+        (["LINE,*CIRCLE", "", "", ""], "system", 1, "canonico"),
+        (["", "BAD,*NOPE", "", ""], "user", 1, "desconocido"),
+        (["", "BAD,*L", "", ""], "user", 1, "alias/no canonico"),
+        (
+            ["FIRST,*LINE", "SECOND,*FIRST", "", ""],
+            "user",
+            1,
+            "alias/no canonico",
+        ),
+        (["", "", "A,*LINE\na,*MOVE", ""], "project", 2, "duplicado"),
+    ] {
+        let error = reg
+            .replace_pgp_layers(layers[0], layers[1], layers[2], layers[3])
+            .unwrap_err();
+        assert_eq!(error.layer.as_str(), expected_layer);
+        assert_eq!(error.line, expected_line);
+        assert!(error.cause.contains(cause), "{error}");
+        assert_eq!(reg.resolve_canonical_name("KEEP"), Some("LINE"));
+        assert_eq!(reg.pgp_alias_count(), 1);
+    }
 }
 
 #[test]
-fn user_alias_with_unknown_target_is_ignored_with_warning() {
+fn pgp_fatals_follow_layer_then_line_across_syntax_and_semantics() {
     let mut reg = CommandRegistry::new();
     reg.register(CommandSpec::new("LINE", "Line", false, nop_exec))
         .unwrap();
+    reg.register(CommandSpec::new("MOVE", "Move", false, nop_exec))
+        .unwrap();
+    reg.replace_pgp_layers("", "KEEP,*LINE", "", "").unwrap();
 
-    let warnings = reg.apply_user_aliases([("Z".to_string(), "ZOOM".to_string())]);
-    assert_eq!(warnings.len(), 1);
-    assert!(reg.lookup("Z").is_none());
+    for (layers, cause) in [
+        (["LINE,*MOVE", "BROKEN", "", ""], "canonico"),
+        (["LINE,*MOVE\nBROKEN", "", "", ""], "canonico"),
+        (
+            ["FIRST,*SECOND\nSECOND,*LINE", "", "", ""],
+            "alias/no canonico",
+        ),
+        (
+            ["FIRST,*SECOND", "SECOND,*LINE", "", ""],
+            "alias/no canonico",
+        ),
+    ] {
+        let error = reg
+            .replace_pgp_layers(layers[0], layers[1], layers[2], layers[3])
+            .unwrap_err();
+        assert_eq!(error.layer.as_str(), "system");
+        assert_eq!(error.line, 1);
+        assert!(error.cause.contains(cause), "{error}");
+        assert_eq!(reg.resolve_canonical_name("KEEP"), Some("LINE"));
+        assert_eq!(reg.pgp_alias_count(), 1);
+    }
 }
 
 #[test]
-fn user_alias_empty_key_is_ignored_with_warning() {
+fn pgp_invocation_uses_the_same_typed_transaction_gateway() {
     let mut reg = CommandRegistry::new();
-    reg.register(CommandSpec::new("LINE", "Line", false, nop_exec))
+    af_cmd::builtin::register_builtins(&mut reg).unwrap();
+    reg.replace_pgp_layers("", "DIBUJA,*LINE", "", "").unwrap();
+    let mut session = Session::new(Units::default());
+
+    let outcome = reg
+        .execute(&mut session, "dibuja", &json!({"p1": [0, 0], "p2": [2, 3]}))
         .unwrap();
-
-    let warnings = reg.apply_user_aliases([("   ".to_string(), "LINE".to_string())]);
-    assert_eq!(warnings.len(), 1);
-}
-
-#[test]
-fn user_alias_can_target_another_user_alias_applied_earlier_in_the_same_call() {
-    let mut reg = CommandRegistry::new();
-    reg.register(CommandSpec::new("LINE", "Line", false, nop_exec))
-        .unwrap();
-
-    // Later pairs may target user aliases established earlier in the same call.
-    let warnings = reg.apply_user_aliases([
-        ("L1".to_string(), "LINE".to_string()),
-        ("L2".to_string(), "L1".to_string()),
-    ]);
-    assert!(warnings.is_empty());
-    assert_eq!(reg.lookup("L2").unwrap().name(), "LINE");
-}
-
-#[test]
-fn user_alias_last_pair_wins_when_the_same_key_repeats() {
-    let mut reg = CommandRegistry::new();
-    reg.register(CommandSpec::new("LINE", "Line", false, nop_exec))
-        .unwrap();
-    reg.register(CommandSpec::new("CIRCLE", "Circle", false, nop_exec))
-        .unwrap();
-
-    reg.apply_user_aliases([
-        ("Q".to_string(), "LINE".to_string()),
-        ("Q".to_string(), "CIRCLE".to_string()),
-    ]);
-    assert_eq!(reg.lookup("Q").unwrap().name(), "CIRCLE");
+    assert_eq!(outcome.tx_seq, Some(0));
+    assert_eq!(outcome.created.len(), 1);
+    let before = session.document().model_space().iter_records().count();
+    assert!(matches!(
+        reg.execute(&mut session, "DIBUJA", &json!({"p1": [0, 0]})),
+        Err(CmdError::MissingParam(_))
+    ));
+    assert_eq!(
+        session.document().model_space().iter_records().count(),
+        before
+    );
 }
 
 // ---- Argument validation by type --------------------------------------------

@@ -1830,3 +1830,101 @@ fn f32_buffer_can_outlive_session_and_be_freed_on_another_thread() {
     assert_eq!(free_status, AF_STATUS_OK);
     assert!(was_zeroed);
 }
+
+#[test]
+fn pgp_reinit_resolve_invoke_fail_closed_and_two_sessions_use_the_same_ffi_gateway() {
+    const REINIT: &[u8] = b"__ARCFORGE_PGP_REINIT";
+    const RESOLVE: &[u8] = b"__ARCFORGE_PGP_RESOLVE";
+
+    let first = create_session();
+    let second = create_session();
+    let (status, mut layered) = execute(
+        first,
+        REINIT,
+        br#"{"system":"DRAW,*LINE\nC,*MOVE","user":"DRAW,*CIRCLE","project":"DRAW,*COPY","session":"DRAW,*LINE"}"#,
+    );
+    assert_eq!(status, AF_STATUS_OK);
+    let layered_json = parse_json(&layered);
+    assert!(layered_json["ok"]["txSeq"].is_null());
+    assert!(layered_json["ok"]["created"].as_array().unwrap().is_empty());
+    assert!(
+        layered_json["ok"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("reemplaza capa project"))
+    );
+
+    let (status, mut legacy) = execute(second, REINIT, br#"{"pgp":"DRAW,*MOVE"}"#);
+    assert_eq!(status, AF_STATUS_OK);
+    assert!(
+        parse_json(&legacy)["ok"]["message"]
+            .as_str()
+            .is_some_and(|message| message.starts_with("PGP: 1 alias(es)"))
+    );
+
+    let (status, mut first_resolve) = execute(first, RESOLVE, br#"{"token":"draw"}"#);
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&first_resolve)["ok"]["message"], "LINE");
+    let (status, mut second_resolve) = execute(second, RESOLVE, br#"{"token":"draw"}"#);
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&second_resolve)["ok"]["message"], "MOVE");
+    let (status, mut canonical) = execute(first, RESOLVE, br#"{"token":"CIRCLE"}"#);
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&canonical)["ok"]["message"], "CIRCLE");
+
+    let (status, mut typed_error) = execute(first, b"DRAW", br#"{"p1":[0,0]}"#);
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&typed_error)["error"]["code"], "missing_param");
+    let (status, mut first_line) = execute(first, b"DRAW", br#"{"p1":[0,0],"p2":[1,1]}"#);
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&first_line)["ok"]["txSeq"], 0);
+
+    let (status, mut invalid_pgp) = execute(
+        first,
+        REINIT,
+        br#"{"system":"","user":"NEW,*NOPE","project":"","session":""}"#,
+    );
+    assert_eq!(status, AF_STATUS_OK);
+    let invalid_json = parse_json(&invalid_pgp);
+    assert_eq!(invalid_json["error"]["code"], "invalid_pgp");
+    assert!(
+        invalid_json["error"]["message"]
+            .as_str()
+            .is_some_and(
+                |message| message.contains("PGP user linea 1") && message.contains("desconocido")
+            )
+    );
+
+    let (status, mut retained) = execute(first, RESOLVE, br#"{"token":"DRAW"}"#);
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&retained)["ok"]["message"], "LINE");
+    let (status, mut second_line) = execute(first, b"DRAW", br#"{"p1":[2,2],"p2":[3,3]}"#);
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&second_line)["ok"]["txSeq"], 1);
+
+    let (status, mut nested) = execute(
+        first,
+        REINIT,
+        br#"{"pgp":{"system":"","user":"","project":"","session":""}}"#,
+    );
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&nested)["error"]["code"], "invalid_args");
+
+    for buffer in [
+        &mut layered,
+        &mut legacy,
+        &mut first_resolve,
+        &mut second_resolve,
+        &mut canonical,
+        &mut typed_error,
+        &mut first_line,
+        &mut invalid_pgp,
+        &mut retained,
+        &mut second_line,
+        &mut nested,
+    ] {
+        // SAFETY: every buffer retains the exact live metadata returned above.
+        assert_eq!(unsafe { af_utf8_buffer_free(buffer) }, AF_STATUS_OK);
+    }
+    assert_eq!(af_session_destroy(first), AF_STATUS_OK);
+    assert_eq!(af_session_destroy(second), AF_STATUS_OK);
+}
