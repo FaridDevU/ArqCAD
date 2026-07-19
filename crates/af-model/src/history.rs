@@ -22,7 +22,7 @@ pub const DEFAULT_UNDO_LIMIT: usize = 100;
 /// Session undo/redo stacks with a configurable limit.
 ///
 /// [`Session`](crate::session::Session) updates it through transaction operations.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct History {
     /// Committed transactions from oldest to newest.
     undo: VecDeque<Transaction>,
@@ -151,9 +151,19 @@ impl History {
         self.undo.pop_back()
     }
 
+    /// Borrows the newest undo transaction without changing either stack.
+    pub(crate) fn next_undo(&self) -> Option<&Transaction> {
+        self.undo.back()
+    }
+
     /// Pops the newest redo transaction.
     pub(crate) fn take_redo(&mut self) -> Option<Transaction> {
         self.redo.pop()
+    }
+
+    /// Borrows the newest redo transaction without changing either stack.
+    pub(crate) fn next_redo(&self) -> Option<&Transaction> {
+        self.redo.last()
     }
 
     /// Pushes a newly undone transaction onto redo.

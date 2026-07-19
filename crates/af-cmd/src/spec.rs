@@ -278,6 +278,7 @@ impl CommandOutcome {
 /// [`redo`](Self::redo), allowing the registry to enforce exact transaction counts.
 pub struct CommandCtx<'a> {
     session: &'a mut Session,
+    tx_attempts: u32,
     tx_count: u32,
     last_tx_seq: Option<u64>,
     /// Observable change sets produced by transact, undo, or redo, in order.
@@ -289,6 +290,7 @@ impl<'a> CommandCtx<'a> {
     pub(crate) fn new(session: &'a mut Session) -> Self {
         Self {
             session,
+            tx_attempts: 0,
             tx_count: 0,
             last_tx_seq: None,
             change_sets: Vec::new(),
@@ -331,7 +333,8 @@ impl<'a> CommandCtx<'a> {
         self.session.undo_transactions()
     }
 
-    /// Executes a session transaction and counts it when committed.
+    /// Executes a session transaction, counting the call before it runs and the
+    /// commit only when it succeeds with at least one operation.
     ///
     /// A closure returning `Ok` with at least one operation commits and increments
     /// the counter. Empty transactions and rollbacks do not count.
@@ -342,6 +345,7 @@ impl<'a> CommandCtx<'a> {
     where
         F: FnOnce(&mut TxContext<'_>) -> Result<T, CmdError>,
     {
+        self.tx_attempts += 1;
         let outcome = self.session.transact(label, f)?;
         if let Some(tx) = outcome.transaction.as_ref() {
             self.tx_count += 1;
@@ -358,7 +362,7 @@ impl<'a> CommandCtx<'a> {
     /// # Errors
     /// Returns [`CmdError::NothingToUndo`] when history is empty.
     pub fn undo(&mut self) -> Result<ChangeSet, CmdError> {
-        let cs = self.session.undo()?;
+        let cs = self.session.try_undo()?.ok_or(CmdError::NothingToUndo)?;
         self.change_sets.push(cs.clone());
         Ok(cs)
     }
@@ -368,7 +372,7 @@ impl<'a> CommandCtx<'a> {
     /// # Errors
     /// Returns [`CmdError::NothingToRedo`] when no redo entry exists.
     pub fn redo(&mut self) -> Result<ChangeSet, CmdError> {
-        let cs = self.session.redo()?;
+        let cs = self.session.try_redo()?.ok_or(CmdError::NothingToRedo)?;
         self.change_sets.push(cs.clone());
         Ok(cs)
     }
@@ -399,6 +403,11 @@ impl<'a> CommandCtx<'a> {
     /// Returns the number of committed transactions created by the command.
     pub(crate) fn tx_count(&self) -> u32 {
         self.tx_count
+    }
+
+    /// Returns the number of command-level transaction calls, including failures.
+    pub(crate) fn tx_attempts(&self) -> u32 {
+        self.tx_attempts
     }
 
     /// Returns the sequence of the command's last committed transaction.

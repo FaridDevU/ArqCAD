@@ -286,32 +286,44 @@ impl CommandRegistry {
         // End the immutable session borrow before command execution.
         let parsed = validate_args(spec.params(), args, session.document())?;
 
-        // `CommandCtx` is the only mutation gateway and counts transactions.
-        let mut ctx = CommandCtx::new(session);
-        let mut outcome = (spec.execute_fn())(&mut ctx, parsed)?;
-        let tx_count = ctx.tx_count();
-        let last_seq = ctx.last_tx_seq();
-        let change_sets = ctx.take_change_sets();
+        // Dispatch mutates only a candidate; the real session is published after
+        // command execution and all transaction-contract checks succeed.
+        // ponytail: use a session snapshot until profiling justifies staged dispatch.
+        let mut candidate = session.clone();
+        let result = (|| {
+            // `CommandCtx` is the only mutation gateway and counts transactions.
+            let mut ctx = CommandCtx::new(&mut candidate);
+            let mut outcome = (spec.execute_fn())(&mut ctx, parsed)?;
+            let tx_attempts = ctx.tx_attempts();
+            let tx_count = ctx.tx_count();
+            let last_seq = ctx.last_tx_seq();
+            let change_sets = ctx.take_change_sets();
+            let change_set_count = change_sets.len();
 
-        // Enforce the declared transaction contract.
-        if spec.affects_document() {
-            if tx_count != 1 {
+            // Enforce the declared transaction contract.
+            if spec.affects_document() {
+                if tx_attempts != 1 || tx_count != 1 || change_set_count != 1 {
+                    return Err(CmdError::ContractViolation(format!(
+                        "command '{}' declares affects_document but produced {tx_attempts} transaction attempts, {tx_count} transactions, and {change_set_count} change sets (exactly 1 of each required)",
+                        spec.name()
+                    )));
+                }
+            } else if tx_attempts != 0 {
                 return Err(CmdError::ContractViolation(format!(
-                    "command '{}' declares affects_document but produced {tx_count} transactions (exactly 1 required)",
+                    "command '{}' declares affects_document=false but produced {tx_attempts} transaction attempts (0 required)",
                     spec.name()
                 )));
             }
-        } else if tx_count != 0 {
-            return Err(CmdError::ContractViolation(format!(
-                "command '{}' declares affects_document=false but produced {tx_count} transactions (0 required)",
-                spec.name()
-            )));
-        }
 
-        // Publish the committed transaction and observed changes uniformly.
-        outcome.tx_seq = last_seq;
-        outcome.change_sets = change_sets;
-        Ok(outcome)
+            // Publish the committed transaction and observed changes uniformly.
+            outcome.tx_seq = last_seq;
+            outcome.change_sets = change_sets;
+            Ok(outcome)
+        })();
+        if result.is_ok() {
+            *session = candidate;
+        }
+        result
     }
 
     /// Validates and previews a command without creating a transaction. The

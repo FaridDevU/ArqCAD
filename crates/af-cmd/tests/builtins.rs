@@ -34,6 +34,31 @@ fn seed(session: &mut Session) -> EntityId {
         .value
 }
 
+fn assert_state_and_next_add_match_twin(
+    reg: &CommandRegistry,
+    session: &mut Session,
+    twin: &mut Session,
+) {
+    assert_eq!(
+        serde_json::to_string(session.document()).unwrap(),
+        serde_json::to_string(twin.document()).unwrap()
+    );
+    assert_eq!(session.history_labels(), twin.history_labels());
+    assert_eq!(session.history().redo_depth(), twin.history().redo_depth());
+
+    let actual = reg.execute(session, "_ADD", &Value::Null).unwrap();
+    let expected = reg.execute(twin, "_ADD", &Value::Null).unwrap();
+    assert_eq!(
+        actual, expected,
+        "next ID, tx_seq and change set must match"
+    );
+    assert_eq!(
+        serde_json::to_string(session.document()).unwrap(),
+        serde_json::to_string(twin.document()).unwrap()
+    );
+    assert_eq!(session.history_labels(), twin.history_labels());
+}
+
 // ---- Transaction-contract commands ------------------------------------------
 
 /// A conforming mutating command that creates exactly one transaction.
@@ -83,6 +108,48 @@ fn fail_exec(ctx: &mut CommandCtx<'_>, _args: ParsedArgs) -> Result<CommandOutco
         tx.add_entity(ContainerRef::ModelSpace, mk_point(layer, 5.0, 5.0))?;
         Err(CmdError::Failed("boom".to_string()))
     })?;
+    Ok(CommandOutcome::new())
+}
+
+/// Commits once, then fails so the registry outer scope must roll it back.
+fn late_fail_exec(ctx: &mut CommandCtx<'_>, _args: ParsedArgs) -> Result<CommandOutcome, CmdError> {
+    let layer = ctx.document().current_layer();
+    ctx.transact("committed-before-error", |tx| -> Result<(), CmdError> {
+        tx.add_entity(ContainerRef::ModelSpace, mk_point(layer, 6.0, 6.0))?;
+        Ok(())
+    })?;
+    Err(CmdError::Failed("late boom".to_string()))
+}
+
+/// Commits and then undoes; a mutating command must publish exactly one change set.
+fn transact_then_undo_exec(
+    ctx: &mut CommandCtx<'_>,
+    _args: ParsedArgs,
+) -> Result<CommandOutcome, CmdError> {
+    let layer = ctx.document().current_layer();
+    ctx.transact("commit", |tx| -> Result<(), CmdError> {
+        tx.add_entity(ContainerRef::ModelSpace, mk_point(layer, 7.0, 7.0))?;
+        Ok(())
+    })?;
+    ctx.undo()?;
+    Ok(CommandOutcome::new())
+}
+
+/// Captures a second non-empty failed transaction after one successful commit.
+fn captured_second_failure_exec(
+    ctx: &mut CommandCtx<'_>,
+    _args: ParsedArgs,
+) -> Result<CommandOutcome, CmdError> {
+    let layer = ctx.document().current_layer();
+    ctx.transact("commit", |tx| -> Result<(), CmdError> {
+        tx.add_entity(ContainerRef::ModelSpace, mk_point(layer, 8.0, 8.0))?;
+        Ok(())
+    })?;
+    let second = ctx.transact("captured failure", |tx| -> Result<(), CmdError> {
+        tx.add_entity(ContainerRef::ModelSpace, mk_point(layer, 9.0, 9.0))?;
+        Err(CmdError::Failed("captured".to_string()))
+    });
+    assert_eq!(second, Err(CmdError::Failed("captured".to_string())));
     Ok(CommandOutcome::new())
 }
 
@@ -152,7 +219,10 @@ fn malicious_two_transaction_command_is_rejected() {
     let mut reg = CommandRegistry::new();
     reg.register(CommandSpec::new("_BADTX", "BadTx", true, badtx_exec))
         .unwrap();
+    reg.register(CommandSpec::new("_ADD", "Add", true, add_exec))
+        .unwrap();
     let mut session = Session::new(Units::default());
+    let mut twin = session.clone();
 
     let err = reg
         .execute(&mut session, "_BADTX", &Value::Null)
@@ -163,6 +233,7 @@ fn malicious_two_transaction_command_is_rejected() {
         }
         other => panic!("esperaba ContractViolation, fue {other:?}"),
     }
+    assert_state_and_next_add_match_twin(&reg, &mut session, &mut twin);
 }
 
 #[test]
@@ -170,12 +241,16 @@ fn view_command_creating_tx_is_rejected() {
     let mut reg = CommandRegistry::new();
     reg.register(CommandSpec::new("_BADVIEW", "BadView", false, badview_exec))
         .unwrap();
+    reg.register(CommandSpec::new("_ADD", "Add", true, add_exec))
+        .unwrap();
     let mut session = Session::new(Units::default());
+    let mut twin = session.clone();
 
     let err = reg
         .execute(&mut session, "_BADVIEW", &Value::Null)
         .unwrap_err();
     assert!(matches!(err, CmdError::ContractViolation(_)));
+    assert_state_and_next_add_match_twin(&reg, &mut session, &mut twin);
 }
 
 #[test]
@@ -217,4 +292,81 @@ fn failed_command_leaves_zero_tx_and_intact_document() {
     assert_eq!(session.history().undo_depth(), 0);
     assert!(!session.can_undo());
     assert_eq!(before, serde_json::to_string(session.document()).unwrap());
+}
+
+#[test]
+fn error_after_inner_commit_rolls_back_registry_outer_scope() {
+    let mut reg = CommandRegistry::new();
+    reg.register(CommandSpec::new(
+        "_LATEFAIL",
+        "LateFail",
+        true,
+        late_fail_exec,
+    ))
+    .unwrap();
+    reg.register(CommandSpec::new("_ADD", "Add", true, add_exec))
+        .unwrap();
+    let mut session = Session::new(Units::default());
+    let before = serde_json::to_string(session.document()).unwrap();
+
+    let err = reg
+        .execute(&mut session, "_LATEFAIL", &Value::Null)
+        .unwrap_err();
+    assert_eq!(err, CmdError::Failed("late boom".to_string()));
+    assert_eq!(serde_json::to_string(session.document()).unwrap(), before);
+    assert_eq!(session.history().undo_depth(), 0);
+
+    let success = reg.execute(&mut session, "_ADD", &Value::Null).unwrap();
+    assert_eq!(success.tx_seq, Some(0));
+    assert_eq!(session.history().undo_depth(), 1);
+}
+
+#[test]
+fn transact_then_undo_is_rejected_without_publishing_candidate() {
+    let mut reg = CommandRegistry::new();
+    reg.register(CommandSpec::new(
+        "_TXUNDO",
+        "TxUndo",
+        true,
+        transact_then_undo_exec,
+    ))
+    .unwrap();
+    reg.register(CommandSpec::new("_ADD", "Add", true, add_exec))
+        .unwrap();
+    let mut session = Session::new(Units::default());
+    let mut twin = session.clone();
+
+    let err = reg
+        .execute(&mut session, "_TXUNDO", &Value::Null)
+        .unwrap_err();
+    assert!(matches!(err, CmdError::ContractViolation(_)));
+    assert_state_and_next_add_match_twin(&reg, &mut session, &mut twin);
+}
+
+#[test]
+fn captured_second_transaction_failure_is_still_a_contract_violation() {
+    let mut reg = CommandRegistry::new();
+    reg.register(CommandSpec::new(
+        "_CAPTURED2",
+        "Captured2",
+        true,
+        captured_second_failure_exec,
+    ))
+    .unwrap();
+    reg.register(CommandSpec::new("_ADD", "Add", true, add_exec))
+        .unwrap();
+    let mut session = Session::new(Units::default());
+    let mut twin = session.clone();
+
+    let err = reg
+        .execute(&mut session, "_CAPTURED2", &Value::Null)
+        .unwrap_err();
+    match err {
+        CmdError::ContractViolation(message) => {
+            assert!(message.contains("2 transaction attempts"), "{message}");
+            assert!(message.contains("1 transactions"), "{message}");
+        }
+        other => panic!("expected ContractViolation, got {other:?}"),
+    }
+    assert_state_and_next_add_match_twin(&reg, &mut session, &mut twin);
 }

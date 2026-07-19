@@ -64,6 +64,7 @@ impl core::fmt::Display for RedoError {
 impl std::error::Error for RedoError {}
 
 /// Editing state for a document and its transaction history.
+#[derive(Clone)]
 pub struct Session {
     doc: Document,
     /// Next confirmed-transaction sequence number.
@@ -157,6 +158,8 @@ impl Session {
         F: FnOnce(&mut TxContext<'_>) -> Result<T, E>,
         E: From<TxError>,
     {
+        // ponytail: snapshot rollback is fail-closed; optimize only if profiling requires it.
+        let before = self.doc.clone();
         let start_next = self.doc.next_object_id();
         let mut ctx = TxContext::new(&mut self.doc, start_next);
         let result = f(&mut ctx);
@@ -174,14 +177,7 @@ impl Session {
                 }
                 // Commit the deferred allocator cursor only after successful operations.
                 if self.doc.advance_id_cursor_to(id_cursor).is_err() {
-                    for op in ops.iter().rev() {
-                        if let Err(_bug) = tx::apply_op_inverse(&mut self.doc, op) {
-                            debug_assert!(
-                                false,
-                                "rollback inverse failed (internal bug): {_bug:?}"
-                            );
-                        }
-                    }
+                    self.doc = before;
                     return Err(E::from(TxError::Internal(
                         "persistent object id space exhausted",
                     )));
@@ -199,12 +195,7 @@ impl Session {
                 })
             }
             Err(e) => {
-                // Roll back applied operations in reverse; the allocator was not committed.
-                for op in ops.iter().rev() {
-                    if let Err(_bug) = tx::apply_op_inverse(&mut self.doc, op) {
-                        debug_assert!(false, "rollback inverse failed (internal bug): {_bug:?}");
-                    }
-                }
+                self.doc = before;
                 Err(e)
             }
         }
@@ -215,17 +206,30 @@ impl Session {
     ///
     /// Undo never decrements `nextObjectId`.
     ///
-    /// # Errors
-    /// Returns [`UndoError::NothingToUndo`] for an empty stack.
-    pub fn undo(&mut self) -> Result<ChangeSet, UndoError> {
-        let transaction = self.history.take_undo().ok_or(UndoError::NothingToUndo)?;
-        // A well-formed session history must always apply its stored inverse.
-        if let Err(_bug) = tx::apply_inverse(&mut self.doc, &transaction) {
-            debug_assert!(false, "undo inverse failed (internal bug): {_bug:?}");
-        }
+    /// Returns `Ok(None)` for an empty stack and a typed replay error without
+    /// changing the document or history when the stored inverse is invalid.
+    pub fn try_undo(&mut self) -> Result<Option<ChangeSet>, TxError> {
+        let Some(transaction) = self.history.next_undo().cloned() else {
+            return Ok(None);
+        };
+        let mut doc = self.doc.clone();
+        tx::apply_inverse(&mut doc, &transaction)?;
         let change_set = ChangeSet::from_transaction(&transaction, Cause::Undo);
+        self.doc = doc;
+        let transaction = self.history.take_undo().expect("peeked undo transaction");
         self.history.push_undone(transaction);
-        Ok(change_set)
+        Ok(Some(change_set))
+    }
+
+    /// Applies undo through [`Session::try_undo`] while retaining the original API.
+    ///
+    /// # Errors
+    /// Returns [`UndoError::NothingToUndo`] for an empty stack or invalid replay.
+    pub fn undo(&mut self) -> Result<ChangeSet, UndoError> {
+        match self.try_undo() {
+            Ok(Some(change_set)) => Ok(change_set),
+            Ok(None) | Err(_) => Err(UndoError::NothingToUndo),
+        }
     }
 
     /// Reapplies the latest redo transaction, returns it to undo, and emits a
@@ -233,16 +237,30 @@ impl Session {
     ///
     /// Restores original snapshot IDs without changing `nextObjectId`.
     ///
-    /// # Errors
-    /// Returns [`RedoError::NothingToRedo`] for an empty stack.
-    pub fn redo(&mut self) -> Result<ChangeSet, RedoError> {
-        let transaction = self.history.take_redo().ok_or(RedoError::NothingToRedo)?;
-        if let Err(_bug) = tx::apply_forward(&mut self.doc, &transaction) {
-            debug_assert!(false, "redo forward failed (internal bug): {_bug:?}");
-        }
+    /// Returns `Ok(None)` for an empty stack and a typed replay error without
+    /// changing the document or history when stored operations are invalid.
+    pub fn try_redo(&mut self) -> Result<Option<ChangeSet>, TxError> {
+        let Some(transaction) = self.history.next_redo().cloned() else {
+            return Ok(None);
+        };
+        let mut doc = self.doc.clone();
+        tx::apply_forward(&mut doc, &transaction)?;
         let change_set = ChangeSet::from_transaction(&transaction, Cause::Redo);
+        self.doc = doc;
+        let transaction = self.history.take_redo().expect("peeked redo transaction");
         self.history.push_redone(transaction);
-        Ok(change_set)
+        Ok(Some(change_set))
+    }
+
+    /// Applies redo through [`Session::try_redo`] while retaining the original API.
+    ///
+    /// # Errors
+    /// Returns [`RedoError::NothingToRedo`] for an empty stack or invalid replay.
+    pub fn redo(&mut self) -> Result<ChangeSet, RedoError> {
+        match self.try_redo() {
+            Ok(Some(change_set)) => Ok(change_set),
+            Ok(None) | Err(_) => Err(RedoError::NothingToRedo),
+        }
     }
 
     /// Immutable history access.
@@ -501,5 +519,73 @@ mod tests {
         assert_eq!(cs_undo.removed(), &[id]);
         assert_eq!(cs_undo.cause(), Cause::Undo);
         assert_eq!(cs_undo.tx_seq(), tx.seq());
+    }
+
+    #[test]
+    fn undo_replay_invalido_no_cambia_documento_ni_stacks() {
+        let mut session = Session::new(Units::default());
+        let rec = point_rec(&session);
+        let transaction = session
+            .transact("add", |tx| -> Result<EntityId, TxError> {
+                tx.add_entity(ContainerRef::ModelSpace, rec)
+            })
+            .unwrap()
+            .transaction
+            .unwrap();
+
+        tx::apply_inverse(session.document_mut(), &transaction).unwrap();
+        let before = serde_json::to_string(session.document()).unwrap();
+        let depths = (
+            session.history().undo_depth(),
+            session.history().redo_depth(),
+        );
+
+        assert!(session.try_undo().is_err());
+        assert_eq!(session.undo(), Err(UndoError::NothingToUndo));
+        assert_eq!(serde_json::to_string(session.document()).unwrap(), before);
+        assert_eq!(
+            (
+                session.history().undo_depth(),
+                session.history().redo_depth()
+            ),
+            depths
+        );
+    }
+
+    #[test]
+    fn redo_replay_invalido_no_cambia_documento_ni_stacks() {
+        let mut session = Session::new(Units::default());
+        let rec = point_rec(&session);
+        let id = session
+            .transact("add", |tx| -> Result<EntityId, TxError> {
+                tx.add_entity(ContainerRef::ModelSpace, rec)
+            })
+            .unwrap()
+            .value;
+        let transaction = session
+            .transact("remove", |tx| -> Result<(), TxError> {
+                tx.remove_entity(id)
+            })
+            .unwrap()
+            .transaction
+            .unwrap();
+        session.undo().unwrap();
+        tx::apply_forward(session.document_mut(), &transaction).unwrap();
+        let before = serde_json::to_string(session.document()).unwrap();
+        let depths = (
+            session.history().undo_depth(),
+            session.history().redo_depth(),
+        );
+
+        assert!(session.try_redo().is_err());
+        assert_eq!(session.redo(), Err(RedoError::NothingToRedo));
+        assert_eq!(serde_json::to_string(session.document()).unwrap(), before);
+        assert_eq!(
+            (
+                session.history().undo_depth(),
+                session.history().redo_depth()
+            ),
+            depths
+        );
     }
 }

@@ -515,6 +515,97 @@ fn el_error_del_closure_se_propaga_tras_el_rollback() {
     assert!(session.document().model_space().is_empty());
 }
 
+#[test]
+fn savepoints_anidados_se_fusionan_en_una_sola_historia() {
+    let mut session = Session::new(Units::default());
+    let layer = session.document().current_layer();
+
+    let out = session
+        .transact("outer", |tx| -> Result<Vec<EntityId>, TxError> {
+            tx.savepoint(|inner| {
+                let a = inner.add_entity(ContainerRef::ModelSpace, point_rec(layer, 1.0, 0.0))?;
+                let b = inner.savepoint(|nested| {
+                    nested.add_entity(ContainerRef::ModelSpace, point_rec(layer, 2.0, 0.0))
+                })?;
+                Ok(vec![a, b])
+            })
+        })
+        .unwrap();
+
+    assert_eq!(out.transaction.as_ref().unwrap().seq(), 0);
+    assert_eq!(out.transaction.as_ref().unwrap().len(), 2);
+    assert_eq!(session.history().undo_depth(), 1);
+    session.undo().unwrap();
+    assert!(
+        out.value
+            .iter()
+            .all(|id| session.document().entity(*id).is_none())
+    );
+    session.redo().unwrap();
+    assert!(
+        out.value
+            .iter()
+            .all(|id| session.document().entity(*id).is_some())
+    );
+}
+
+#[test]
+fn savepoint_err_capturado_restaura_solo_su_estado_y_allocator() {
+    let mut session = Session::new(Units::default());
+    let layer = session.document().current_layer();
+
+    let out = session
+        .transact("outer", |tx| -> Result<(EntityId, EntityId), TxError> {
+            let mut rolled_back = None;
+            let error = tx.savepoint(|inner| -> Result<(), TxError> {
+                rolled_back =
+                    Some(inner.add_entity(ContainerRef::ModelSpace, point_rec(layer, 9.0, 0.0))?);
+                Err(TxError::Internal("injected inner error"))
+            });
+            assert_eq!(error, Err(TxError::Internal("injected inner error")));
+
+            let kept = tx.add_entity(ContainerRef::ModelSpace, point_rec(layer, 2.0, 0.0))?;
+            Ok((rolled_back.unwrap(), kept))
+        })
+        .unwrap();
+
+    assert_eq!(
+        out.value.0, out.value.1,
+        "savepoint must restore its ID cursor"
+    );
+    assert_eq!(out.transaction.unwrap().len(), 1);
+    assert_eq!(session.document().model_space().len(), 1);
+    assert_eq!(session.history().undo_depth(), 1);
+}
+
+#[test]
+fn error_propagado_tras_inner_ok_restaura_outer_y_secuencia() {
+    let mut session = Session::new(Units::default());
+    let mut twin = Session::new(Units::default());
+    let layer = session.document().current_layer();
+    let before = serde_json::to_string(session.document()).unwrap();
+
+    let result = session.transact("outer", |tx| -> Result<(), TxError> {
+        tx.savepoint(|inner| {
+            inner.add_entity(ContainerRef::ModelSpace, point_rec(layer, 1.0, 0.0))?;
+            Ok::<(), TxError>(())
+        })?;
+        Err(TxError::Internal("injected outer error"))
+    });
+    assert_eq!(
+        result.unwrap_err(),
+        TxError::Internal("injected outer error")
+    );
+    assert_eq!(serde_json::to_string(session.document()).unwrap(), before);
+    assert_eq!(session.history().undo_depth(), 0);
+
+    let actual = add_point(&mut session, layer, 2.0, 0.0);
+    let twin_layer = twin.document().current_layer();
+    let expected = add_point(&mut twin, twin_layer, 2.0, 0.0);
+    assert_eq!(actual, expected);
+    assert_eq!(session.undo_transactions().next().unwrap().seq(), 0);
+}
+
 // --------------------------------------------------------------------------
 // Serialization round trip after a committed transaction.
 // --------------------------------------------------------------------------

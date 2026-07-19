@@ -18,7 +18,9 @@
 //!
 //! # Nested transactions
 //!
-//! Exclusive borrowing prevents nesting at compile time.
+//! [`TxContext::savepoint`] provides nested scopes inside one outer transaction.
+//! Successful scopes merge their operations; failed scopes restore their local
+//! document and allocator checkpoint.
 //!
 //! # Undo and redo
 //!
@@ -371,6 +373,30 @@ impl<'a> TxContext<'a> {
     #[must_use]
     pub fn doc(&self) -> &Document {
         &*self.doc
+    }
+
+    /// Runs a nested savepoint inside this transaction.
+    ///
+    /// Successful operations merge into the outer transaction without creating
+    /// separate history. An error restores only this savepoint, including its
+    /// deferred ID allocations, so the caller may handle the error and continue.
+    pub fn savepoint<T, E, F>(&mut self, f: F) -> Result<T, E>
+    where
+        F: FnOnce(&mut Self) -> Result<T, E>,
+    {
+        // ponytail: clone the checkpoint; use inverse journaling only if nesting is hot.
+        let before_doc = self.doc.clone();
+        let before_ops = self.ops.len();
+        let before_id = self.id_cursor;
+        match f(self) {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                *self.doc = before_doc;
+                self.ops.truncate(before_ops);
+                self.id_cursor = before_id;
+                Err(error)
+            }
+        }
     }
 
     /// Consumes a valid ID from the deferred cursor.
