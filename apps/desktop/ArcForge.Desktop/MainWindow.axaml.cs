@@ -2680,15 +2680,8 @@ public sealed partial class MainWindow : Window
         var comma = line.IndexOf(',');
         return comma > 0 &&
             line[(comma + 1)..].TrimStart().StartsWith('*') &&
-            AliasComparisonKey(line[..comma].Trim()) == AliasComparisonKey(alias);
+            string.Equals(line[..comma].Trim(), alias, StringComparison.OrdinalIgnoreCase);
     }
-
-    private static string AliasComparisonKey(string value) =>
-        value
-            .Normalize(System.Text.NormalizationForm.FormKC)
-            .Replace("ß", "ss", StringComparison.Ordinal)
-            .Replace("ẞ", "ss", StringComparison.Ordinal)
-            .ToUpperInvariant();
 
     private static bool IsAliasToken(string value) =>
         !string.IsNullOrWhiteSpace(value) &&

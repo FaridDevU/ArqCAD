@@ -2941,20 +2941,6 @@ internal static class Program
             Check(window.HandleKey(Key.Escape, KeyModifiers.None),
                 "expansive Unicode alias cancels cleanly");
 
-            window.SubmitCommand("ALIASEDIT STRASSE,*LINE");
-            Dispatcher.UIThread.RunJobs();
-            Check(!window.AliasContent.Contains("straße,*LINE", StringComparison.Ordinal) &&
-                window.AliasContent.Contains("STRASSE,*LINE", StringComparison.Ordinal),
-                "ALIASEDIT replaces an equivalent expansive Unicode spelling");
-            window.SubmitCommand("ALIASEDIT REMOVE straße");
-            Dispatcher.UIThread.RunJobs();
-            Check(!window.AliasContent.Contains("STRASSE,*", StringComparison.Ordinal) &&
-                !File.ReadAllText(aliasPath).Contains("STRASSE,*", StringComparison.Ordinal),
-                "ALIASEDIT REMOVE matches expansive Unicode spellings");
-            window.SubmitCommand("STRASSE");
-            Check(window.LastCommandErrorCode == "COMMAND_ERROR" && !window.IsLineActive,
-                "removed expansive Unicode alias is absent from the active table");
-
             window.SubmitCommand("DUP");
             Check(window.ActiveDrawingTool == "Line", "duplicate PGP alias uses the last definition");
             Check(window.HandleKey(Key.Escape, KeyModifiers.None), "duplicate alias LINE cancels cleanly");
