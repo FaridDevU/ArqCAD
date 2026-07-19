@@ -460,6 +460,88 @@ fn save_open_roundtrip_preserves_lines_history_sequence_and_next_id() {
 }
 
 #[test]
+fn save_destroy_open_roundtrips_each_history_checkpoint() {
+    let cases: [(&str, &[&[u8]], usize); 3] = [
+        ("commit", &[], 2),
+        ("undo", &[b"UNDO".as_slice()], 1),
+        ("redo", &[b"UNDO".as_slice(), b"REDO".as_slice()], 2),
+    ];
+
+    for (label, checkpoint_commands, expected_lines) in cases {
+        let source = create_session();
+        let mut ids = Vec::new();
+        for args in [
+            br#"{"p1":[0,0],"p2":[1,1]}"#.as_slice(),
+            br#"{"p1":[2,2],"p2":[3,3]}"#.as_slice(),
+        ] {
+            let (status, mut line) = execute(source, LINE, args);
+            assert_eq!(status, AF_STATUS_OK, "{label}");
+            ids.push(parse_json(&line)["ok"]["created"][0].as_u64().unwrap());
+            assert_eq!(unsafe { af_utf8_buffer_free(&mut line) }, AF_STATUS_OK);
+        }
+        for command in checkpoint_commands {
+            let (status, mut outcome) = execute(source, command, b"null");
+            assert_eq!(status, AF_STATUS_OK, "{label}");
+            assert!(parse_json(&outcome)["ok"]["txSeq"].is_null());
+            assert_eq!(unsafe { af_utf8_buffer_free(&mut outcome) }, AF_STATUS_OK);
+        }
+
+        let (status, mut before) = render(source);
+        assert_eq!(status, AF_STATUS_OK, "{label}");
+        let expected = parse_json(&before);
+        assert_eq!(
+            expected["vertices"].as_array().unwrap().len(),
+            expected_lines * 4,
+            "{label}"
+        );
+        assert_eq!(unsafe { af_utf8_buffer_free(&mut before) }, AF_STATUS_OK);
+
+        let (status, mut saved) = save(source);
+        assert_eq!(status, AF_STATUS_OK, "{label}");
+        assert_eq!(af_session_destroy(source), AF_STATUS_OK);
+
+        let target = create_session();
+        let (status, mut opened) = open(target, byte_values(&saved));
+        assert_eq!(status, AF_STATUS_OK, "{label}");
+        assert_eq!(parse_json(&opened), json!({"ok": []}), "{label}");
+        assert_eq!(unsafe { af_utf8_buffer_free(&mut opened) }, AF_STATUS_OK);
+        assert_eq!(unsafe { af_byte_buffer_free(&mut saved) }, AF_STATUS_OK);
+
+        let (status, mut after) = render(target);
+        assert_eq!(status, AF_STATUS_OK, "{label}");
+        assert_eq!(parse_json(&after), expected, "{label}");
+        assert_eq!(unsafe { af_utf8_buffer_free(&mut after) }, AF_STATUS_OK);
+
+        for command in [b"REDO".as_slice(), b"UNDO".as_slice()] {
+            let (status, mut empty_history) = execute(target, command, b"null");
+            assert_eq!(status, AF_STATUS_OK, "{label}");
+            assert!(parse_json(&empty_history)["error"].is_object(), "{label}");
+            assert_eq!(
+                unsafe { af_utf8_buffer_free(&mut empty_history) },
+                AF_STATUS_OK
+            );
+        }
+
+        let (status, mut unchanged) = render(target);
+        assert_eq!(status, AF_STATUS_OK, "{label}");
+        assert_eq!(parse_json(&unchanged), expected, "{label}");
+        assert_eq!(unsafe { af_utf8_buffer_free(&mut unchanged) }, AF_STATUS_OK);
+
+        let (status, mut first) = execute(target, LINE, br#"{"p1":[9,9],"p2":[10,10]}"#);
+        assert_eq!(status, AF_STATUS_OK, "{label}");
+        let first_json = parse_json(&first);
+        assert_eq!(first_json["ok"]["txSeq"], 0, "{label}");
+        assert_eq!(
+            first_json["ok"]["created"][0].as_u64().unwrap(),
+            ids.iter().copied().max().unwrap() + 1,
+            "{label} nextObjectId"
+        );
+        assert_eq!(unsafe { af_utf8_buffer_free(&mut first) }, AF_STATUS_OK);
+        assert_eq!(af_session_destroy(target), AF_STATUS_OK);
+    }
+}
+
+#[test]
 fn persistence_validates_precedence_thread_and_typed_byte_ownership() {
     let handle = create_session();
 

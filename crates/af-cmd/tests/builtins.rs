@@ -101,6 +101,17 @@ fn emptyadd_exec(ctx: &mut CommandCtx<'_>, _args: ParsedArgs) -> Result<CommandO
     Ok(CommandOutcome::new())
 }
 
+/// A mutating command whose recorded operations cancel structurally.
+fn net_zero_exec(ctx: &mut CommandCtx<'_>, _args: ParsedArgs) -> Result<CommandOutcome, CmdError> {
+    let layer = ctx.document().current_layer();
+    ctx.transact("net-zero", |tx| -> Result<(), CmdError> {
+        let id = tx.add_entity(ContainerRef::ModelSpace, mk_point(layer, 4.0, 4.0))?;
+        tx.remove_entity(id)?;
+        Ok(())
+    })?;
+    Ok(CommandOutcome::new())
+}
+
 /// A mutating command whose failed transaction rolls back without changes.
 fn fail_exec(ctx: &mut CommandCtx<'_>, _args: ParsedArgs) -> Result<CommandOutcome, CmdError> {
     let layer = ctx.document().current_layer();
@@ -168,11 +179,17 @@ fn undo_redo_over_real_session() {
     let out = reg.execute(&mut session, "UNDO", &Value::Null).unwrap();
     assert_eq!(out.tx_seq, None);
     assert_eq!(out.message.as_deref(), Some("Undo seed"));
+    assert_eq!(out.change_sets.len(), 1);
+    assert_eq!(out.change_sets[0].cause(), af_model::Cause::Undo);
+    assert_eq!(out.change_sets[0].tx_seq(), 0);
     assert!(session.document().entity(id).is_none());
 
     let out = reg.execute(&mut session, "REDO", &Value::Null).unwrap();
     assert_eq!(out.tx_seq, None);
     assert_eq!(out.message.as_deref(), Some("Redo seed"));
+    assert_eq!(out.change_sets.len(), 1);
+    assert_eq!(out.change_sets[0].cause(), af_model::Cause::Redo);
+    assert_eq!(out.change_sets[0].tx_seq(), 0);
     assert!(session.document().entity(id).is_some());
 
     reg.execute(&mut session, "u", &Value::Null).unwrap();
@@ -210,6 +227,9 @@ fn well_behaved_command_creates_exactly_one_tx() {
     let out = reg.execute(&mut session, "_ADD", &Value::Null).unwrap();
     assert_eq!(out.created.len(), 1);
     assert!(out.tx_seq.is_some());
+    assert_eq!(out.change_sets.len(), 1);
+    assert_eq!(out.change_sets[0].cause(), af_model::Cause::Do);
+    assert_eq!(out.change_sets[0].tx_seq(), out.tx_seq.unwrap());
     assert!(session.document().entity(out.created[0]).is_some());
     assert_eq!(session.history().undo_depth(), 1);
 }
@@ -269,9 +289,76 @@ fn affects_document_command_with_empty_tx_is_rejected() {
         .execute(&mut session, "_EMPTYADD", &Value::Null)
         .unwrap_err();
     match err {
-        CmdError::ContractViolation(msg) => assert!(msg.contains("0 transactions"), "msg: {msg}"),
-        other => panic!("esperaba ContractViolation, fue {other:?}"),
+        CmdError::ContractViolation(message) => {
+            assert!(message.contains("0 semantic no-ops"), "{message}");
+        }
+        other => panic!("expected ContractViolation, got {other:?}"),
     }
+}
+
+#[test]
+fn semantic_noop_preserves_and_replays_redo_branch() {
+    let mut reg = CommandRegistry::new();
+    register_builtins(&mut reg).unwrap();
+    reg.register(CommandSpec::new("_NETZERO", "NetZero", true, net_zero_exec))
+        .unwrap();
+    reg.register(CommandSpec::new("_ADD", "Add", true, add_exec))
+        .unwrap();
+    let mut session = Session::new(Units::default());
+
+    reg.execute(&mut session, "_ADD", &Value::Null).unwrap();
+    reg.execute(&mut session, "_ADD", &Value::Null).unwrap();
+    reg.execute(&mut session, "UNDO", &Value::Null).unwrap();
+    let mut twin = session.clone();
+    let out = reg.execute(&mut session, "_NETZERO", &Value::Null).unwrap();
+    assert_eq!(out.tx_seq, None);
+    assert!(out.change_sets.is_empty());
+    assert_eq!(session.history().redo_depth(), 1);
+
+    let actual_redo = reg.execute(&mut session, "REDO", &Value::Null).unwrap();
+    let expected_redo = reg.execute(&mut twin, "REDO", &Value::Null).unwrap();
+    assert_eq!(actual_redo, expected_redo);
+    assert_eq!(session.document(), twin.document());
+    assert_eq!(session.history_labels(), twin.history_labels());
+    assert_eq!(session.history().redo_depth(), 0);
+    assert_state_and_next_add_match_twin(&reg, &mut session, &mut twin);
+}
+
+#[test]
+fn alternate_real_mutation_invalidates_redo_without_state_or_publication_drift() {
+    let mut reg = CommandRegistry::new();
+    register_builtins(&mut reg).unwrap();
+    reg.register(CommandSpec::new("_NETZERO", "NetZero", true, net_zero_exec))
+        .unwrap();
+    reg.register(CommandSpec::new("_ADD", "Add", true, add_exec))
+        .unwrap();
+    let mut session = Session::new(Units::default());
+
+    reg.execute(&mut session, "_ADD", &Value::Null).unwrap();
+    reg.execute(&mut session, "_ADD", &Value::Null).unwrap();
+    reg.execute(&mut session, "UNDO", &Value::Null).unwrap();
+    let mut twin = session.clone();
+    let noop = reg.execute(&mut session, "_NETZERO", &Value::Null).unwrap();
+    assert_eq!(noop.tx_seq, None);
+    assert!(noop.change_sets.is_empty());
+
+    let actual = reg.execute(&mut session, "_ADD", &Value::Null).unwrap();
+    let expected = reg.execute(&mut twin, "_ADD", &Value::Null).unwrap();
+    assert_eq!(actual, expected);
+    assert_eq!(session.document(), twin.document());
+    assert_eq!(session.history_labels(), twin.history_labels());
+    assert!(!session.can_redo());
+
+    let before_error = session.clone();
+    let err = reg.execute(&mut session, "REDO", &Value::Null).unwrap_err();
+    assert_eq!(err, CmdError::NothingToRedo);
+    assert_eq!(session.document(), before_error.document());
+    assert_eq!(session.history_labels(), before_error.history_labels());
+    assert_eq!(
+        session.history().redo_depth(),
+        before_error.history().redo_depth()
+    );
+    assert_eq!(session.document(), twin.document());
 }
 
 // ---- Failed command rollback -------------------------------------------------

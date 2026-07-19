@@ -436,9 +436,9 @@ mod tests {
     use super::*;
     use af_math::Point2;
     use af_model::entity::{Color, EntityGeometry, EntityRecord, LineGeo, LineTypeRef, Lineweight};
-    use af_model::id::ObjectId;
+    use af_model::id::{EntityId, ObjectId};
     use af_model::units::Units;
-    use af_model::{ContainerRef, Session, TxError};
+    use af_model::{ContainerRef, Group, Session, TxError};
 
     /// Document with an extra layer and awkward coordinates to exercise exact
     /// f64 roundtrips through the public transaction API.
@@ -500,6 +500,89 @@ mod tests {
         let (loaded, _) = load(&path).unwrap();
         assert_eq!(loaded, doc);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_close_load_roundtrips_commit_undo_redo_checkpoints() {
+        let mut session = Session::new(Units::default());
+        let add_line = |session: &mut Session, x: f64| {
+            let layer = session.document().current_layer();
+            let rec = EntityRecord::new(
+                ObjectId::NIL.into(),
+                layer,
+                Color::ByLayer,
+                LineTypeRef::ByLayer,
+                Lineweight::ByLayer,
+                EntityGeometry::Line(LineGeo::new(Point2::new(x, 0.0), Point2::new(x + 1.0, 1.0))),
+            );
+            session
+                .transact("line", |tx| -> std::result::Result<EntityId, TxError> {
+                    tx.add_entity(ContainerRef::ModelSpace, rec)
+                })
+                .unwrap()
+        };
+
+        let first = add_line(&mut session, 0.0).value;
+        let second = add_line(&mut session, 2.0).value;
+        let members = vec![second, first, second];
+        let group_id = session
+            .transact("ordered group", |tx| {
+                tx.add_group_raw(
+                    Group::new(ObjectId::NIL.into(), "checkpoint").with_members(members.clone()),
+                )
+            })
+            .unwrap()
+            .value;
+        add_line(&mut session, 4.0);
+        let commit = session.document().clone();
+        let commit_path = tmp_path("checkpoint-commit.arcf");
+        save(&commit, &commit_path).unwrap();
+
+        session.undo().unwrap();
+        let undo = session.document().clone();
+        let undo_path = tmp_path("checkpoint-undo.arcf");
+        save(&undo, &undo_path).unwrap();
+
+        session.redo().unwrap();
+        let redo = session.document().clone();
+        let redo_path = tmp_path("checkpoint-redo.arcf");
+        save(&redo, &redo_path).unwrap();
+        assert_ne!(commit, undo);
+        assert_eq!(redo, commit);
+        for checkpoint in [&commit, &undo, &redo] {
+            assert_eq!(checkpoint.group(group_id).unwrap().members(), members);
+        }
+        drop(session);
+
+        for (label, path, expected) in [
+            ("commit", commit_path, commit),
+            ("undo", undo_path, undo),
+            ("redo", redo_path, redo),
+        ] {
+            let (loaded, report) = load(&path).unwrap();
+            assert_eq!(report.recovery, Recovery::Normal, "{label}");
+            assert!(report.issues.is_empty(), "{label}: {:?}", report.issues);
+            assert_eq!(loaded, expected, "{label}");
+            assert_eq!(
+                loaded.group(group_id).unwrap().members(),
+                members,
+                "{label} ordered group membership"
+            );
+            assert_eq!(
+                loaded.next_object_id(),
+                expected.next_object_id(),
+                "{label} nextObjectId"
+            );
+
+            let expected_id = loaded.next_object_id();
+            let mut reopened = Session::from_document(loaded);
+            assert_eq!(reopened.history().undo_depth(), 0, "{label}");
+            assert_eq!(reopened.history().redo_depth(), 0, "{label}");
+            let first = add_line(&mut reopened, 10.0);
+            assert_eq!(first.value.raw().0, expected_id, "{label}");
+            assert_eq!(first.transaction.unwrap().seq(), 0, "{label}");
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     #[test]

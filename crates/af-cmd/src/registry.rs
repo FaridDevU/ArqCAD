@@ -296,15 +296,18 @@ impl CommandRegistry {
             let mut outcome = (spec.execute_fn())(&mut ctx, parsed)?;
             let tx_attempts = ctx.tx_attempts();
             let tx_count = ctx.tx_count();
+            let semantic_noops = ctx.semantic_noop_count();
             let last_seq = ctx.last_tx_seq();
             let change_sets = ctx.take_change_sets();
             let change_set_count = change_sets.len();
 
             // Enforce the declared transaction contract.
             if spec.affects_document() {
-                if tx_attempts != 1 || tx_count != 1 || change_set_count != 1 {
+                let real_change = tx_count == 1 && change_set_count == 1 && semantic_noops == 0;
+                let semantic_noop = tx_count == 0 && change_set_count == 0 && semantic_noops == 1;
+                if tx_attempts != 1 || !(real_change || semantic_noop) {
                     return Err(CmdError::ContractViolation(format!(
-                        "command '{}' declares affects_document but produced {tx_attempts} transaction attempts, {tx_count} transactions, and {change_set_count} change sets (exactly 1 of each required)",
+                        "command '{}' declares affects_document but produced {tx_attempts} transaction attempts, {tx_count} transactions, {semantic_noops} semantic no-ops, and {change_set_count} change sets (exactly one non-empty attempt yielding 1/1 or semantic no-op 0/0 required)",
                         spec.name()
                     )));
                 }

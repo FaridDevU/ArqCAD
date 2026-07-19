@@ -9,7 +9,7 @@ use af_model::entity::{
 };
 use af_model::id::{BlockId, EntityId, LayerId, ObjectId, StyleId};
 use af_model::units::Units;
-use af_model::{ContainerRef, Document, Layer, Session, TxError, TxOutcome};
+use af_model::{ContainerRef, DocOp, Document, Group, Layer, Session, TxError, TxOutcome};
 
 // --------------------------------------------------------------------------
 // Helpers.
@@ -273,9 +273,16 @@ fn modify_no_op_no_registra_operacion() {
 // --------------------------------------------------------------------------
 
 #[test]
-fn creada_y_borrada_en_la_misma_tx_se_omite_del_changeset() {
+fn net_zero_descarta_allocator_historia_secuencia_y_conserva_redo() {
     let mut session = Session::new(Units::default());
     let l0 = session.document().current_layer();
+
+    add_point(&mut session, l0, -1.0, 0.0);
+    add_point(&mut session, l0, -2.0, 0.0);
+    session.undo().unwrap();
+    let mut twin = session.clone();
+    let before = session.document().clone();
+    let expected_id = session.document().next_object_id();
 
     let out = session
         .transact("add+rm", |tx| -> Result<EntityId, TxError> {
@@ -284,17 +291,90 @@ fn creada_y_borrada_en_la_misma_tx_se_omite_del_changeset() {
             Ok(id)
         })
         .unwrap();
-    let id = out.value;
+    assert_eq!(out.value.raw().0, expected_id);
+    assert!(out.transaction.is_none());
+    assert!(out.change_set.is_none());
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.history_labels(), twin.history_labels());
+    assert_eq!(session.history().redo_depth(), 1);
+    assert_eq!(session.history().redo_depth(), twin.history().redo_depth());
 
-    // Two reversible operations produce a transaction but no net change set.
-    let tx = out.transaction.expect("2 ops -> hay transacción");
-    assert_eq!(tx.len(), 2);
-    let cs = out.change_set.unwrap();
-    assert!(cs.added().is_empty());
-    assert!(cs.removed().is_empty());
-    assert!(cs.is_empty());
-    // The entity is absent from the final document.
-    assert!(session.document().entity(id).is_none());
+    let actual = session
+        .transact("next", |tx| -> Result<EntityId, TxError> {
+            tx.add_entity(ContainerRef::ModelSpace, point_rec(l0, 3.0, 0.0))
+        })
+        .unwrap();
+    let twin_layer = twin.document().current_layer();
+    let expected = twin
+        .transact("next", |tx| -> Result<EntityId, TxError> {
+            tx.add_entity(ContainerRef::ModelSpace, point_rec(twin_layer, 3.0, 0.0))
+        })
+        .unwrap();
+    assert_eq!(actual.value, expected.value);
+    assert_eq!(
+        actual.transaction.unwrap().seq(),
+        expected.transaction.unwrap().seq()
+    );
+    assert!(!session.can_redo(), "a real branch replaces redo");
+}
+
+#[test]
+fn net_zero_signed_zero_restores_exact_serialized_snapshot() {
+    let mut session = Session::new(Units::default());
+    let layer = session.document().current_layer();
+    let id = add_point(&mut session, layer, -0.0, 0.0);
+    add_point(&mut session, layer, 5.0, 0.0);
+    session.undo().unwrap();
+    let mut twin = session.clone();
+    let before = serde_json::to_vec(session.document()).unwrap();
+    let next_id = session.document().next_object_id();
+    let labels: Vec<String> = session
+        .history_labels()
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let redo_depth = session.history().redo_depth();
+
+    let out = session
+        .transact("signed zero", |tx| -> Result<(), TxError> {
+            tx.modify_entity(id, |record| {
+                let EntityGeometry::Point(point) = &mut record.geometry else {
+                    unreachable!()
+                };
+                point.position = Point2::new(1.0, 0.0);
+            })?;
+            tx.modify_entity(id, |record| {
+                let EntityGeometry::Point(point) = &mut record.geometry else {
+                    unreachable!()
+                };
+                point.position = Point2::new(0.0, 0.0);
+            })
+        })
+        .unwrap();
+
+    assert!(out.transaction.is_none());
+    assert!(out.change_set.is_none());
+    assert_eq!(serde_json::to_vec(session.document()).unwrap(), before);
+    assert_eq!(session.document().next_object_id(), next_id);
+    assert_eq!(
+        session
+            .history_labels()
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>(),
+        labels
+    );
+    assert_eq!(session.history().redo_depth(), redo_depth);
+
+    let actual = add_point(&mut session, layer, 9.0, 0.0);
+    let twin_layer = twin.document().current_layer();
+    let expected = add_point(&mut twin, twin_layer, 9.0, 0.0);
+    assert_eq!(actual, expected);
+    assert_eq!(
+        session.undo_transactions().next().unwrap().seq(),
+        twin.undo_transactions().next().unwrap().seq()
+    );
+    assert_eq!(session.document(), twin.document());
 }
 
 #[test]
@@ -350,10 +430,9 @@ fn modify_y_volver_al_estado_original_se_omite_del_changeset() {
             Ok(())
         })
         .unwrap();
-    let cs = out.change_set.unwrap();
-    assert!(cs.modified().is_empty(), "neto sin cambios -> no modified");
-    assert!(cs.is_empty());
-    assert_eq!(out.transaction.unwrap().len(), 2);
+    assert!(out.transaction.is_none());
+    assert!(out.change_set.is_none());
+    assert_eq!(session.history().undo_depth(), 1);
 }
 
 #[test]
@@ -784,12 +863,8 @@ fn capa_creada_y_borrada_en_la_misma_tx_se_omite_de_layers_changed() {
         .unwrap();
     let id = out.value;
 
-    // Two reversible operations produce a transaction but no net change.
-    let tx = out.transaction.expect("2 ops -> hay transacción");
-    assert_eq!(tx.len(), 2);
-    let cs = out.change_set.unwrap();
-    assert!(cs.layers_changed().is_empty());
-    assert!(cs.is_empty());
+    assert!(out.transaction.is_none());
+    assert!(out.change_set.is_none());
     assert!(session.document().layer(id).is_none());
 }
 
@@ -1051,6 +1126,75 @@ fn layer_builder_with_cubre_todas_las_props_via_modify() {
     assert!(l.is_locked());
     assert!(!l.is_plottable());
     assert_eq!(l.description(), "perimetral");
+}
+
+#[test]
+fn remove_entity_prunes_all_group_memberships_and_replays_exactly() {
+    let mut session = Session::new(Units::default());
+    let layer = session.document().current_layer();
+    let ids = session
+        .transact("seed", |tx| -> Result<Vec<EntityId>, TxError> {
+            Ok(vec![
+                tx.add_entity(ContainerRef::ModelSpace, point_rec(layer, 0.0, 0.0))?,
+                tx.add_entity(ContainerRef::ModelSpace, point_rec(layer, 1.0, 0.0))?,
+                tx.add_entity(ContainerRef::ModelSpace, point_rec(layer, 2.0, 0.0))?,
+            ])
+        })
+        .unwrap()
+        .value;
+    let [a, removed, c] = ids.as_slice() else {
+        unreachable!()
+    };
+    let (g1, g2) = session
+        .transact("groups", |tx| {
+            let g1 = tx.add_group_raw(
+                Group::new(ObjectId::NIL.into(), "G1")
+                    .with_members(vec![*a, *removed, *removed, *c, *removed]),
+            )?;
+            let g2 = tx.add_group_raw(
+                Group::new(ObjectId::NIL.into(), "G2").with_members(vec![*removed, *a, *removed]),
+            )?;
+            Ok::<_, TxError>((g1, g2))
+        })
+        .unwrap()
+        .value;
+
+    let before = session.document().clone();
+    let next_id = before.next_object_id();
+    let out = session
+        .transact("remove grouped", |tx| tx.remove_entity(*removed))
+        .unwrap();
+    let transaction = out.transaction.as_ref().unwrap();
+    let removal_seq = transaction.seq();
+    assert!(matches!(
+        &transaction.ops()[0],
+        DocOp::ModifyGroup { before, .. } if before.id() == g1
+    ));
+    assert!(matches!(
+        &transaction.ops()[1],
+        DocOp::ModifyGroup { before, .. } if before.id() == g2
+    ));
+    assert!(matches!(&transaction.ops()[2], DocOp::RemoveEntity { .. }));
+    assert_eq!(session.document().group(g1).unwrap().members(), &[*a, *c]);
+    assert_eq!(session.document().group(g2).unwrap().members(), &[*a]);
+    assert!(session.document().entity(*removed).is_none());
+    let change_set = out.change_set.as_ref().unwrap();
+    assert_eq!(change_set.removed(), &[*removed]);
+    assert!(change_set.doc_changed());
+    let after = session.document().clone();
+
+    let undo = session.try_undo().unwrap().unwrap();
+    assert_eq!(undo.cause(), af_model::Cause::Undo);
+    assert_eq!(undo.tx_seq(), removal_seq);
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.document().next_object_id(), next_id);
+
+    let redo = session.try_redo().unwrap().unwrap();
+    assert_eq!(redo.cause(), af_model::Cause::Redo);
+    assert_eq!(redo.tx_seq(), removal_seq);
+    assert_eq!(session.document(), &after);
+    assert_eq!(session.document().next_object_id(), next_id);
+    assert!(session.document().clone().validate_full().is_empty());
 }
 
 // --------------------------------------------------------------------------

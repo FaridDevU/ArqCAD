@@ -209,7 +209,8 @@ impl CommandSpec {
         &self.params
     }
 
-    /// Returns whether successful execution must create exactly one transaction.
+    /// Returns whether execution must attempt exactly one transaction and yield
+    /// either one committed change or a non-empty structural no-op.
     #[must_use]
     pub fn affects_document(&self) -> bool {
         self.affects_document
@@ -239,9 +240,11 @@ pub struct CommandOutcome {
     /// them from [`CommandCtx`] so index, render, and selection observers can update
     /// incrementally from the model's own event.
     ///
-    /// Mutating commands produce exactly one `Cause::Do` change set. UNDO and REDO
-    /// create no transaction but publish one inverse or reapplied change set. Pure
-    /// view commands publish none.
+    /// Mutating commands produce exactly one `Cause::Do` change set or, for a
+    /// non-empty structural no-op, none with `tx_seq = None`. A truly empty
+    /// mutating attempt remains a contract violation. UNDO and REDO create no
+    /// transaction but publish one inverse or reapplied change set. Pure view
+    /// commands publish none.
     pub change_sets: Vec<ChangeSet>,
 }
 
@@ -280,6 +283,7 @@ pub struct CommandCtx<'a> {
     session: &'a mut Session,
     tx_attempts: u32,
     tx_count: u32,
+    semantic_noop_count: u32,
     last_tx_seq: Option<u64>,
     /// Observable change sets produced by transact, undo, or redo, in order.
     change_sets: Vec<ChangeSet>,
@@ -292,6 +296,7 @@ impl<'a> CommandCtx<'a> {
             session,
             tx_attempts: 0,
             tx_count: 0,
+            semantic_noop_count: 0,
             last_tx_seq: None,
             change_sets: Vec::new(),
         }
@@ -334,10 +339,12 @@ impl<'a> CommandCtx<'a> {
     }
 
     /// Executes a session transaction, counting the call before it runs and the
-    /// commit only when it succeeds with at least one operation.
+    /// commit only when it succeeds with a semantic document change.
     ///
-    /// A closure returning `Ok` with at least one operation commits and increments
-    /// the counter. Empty transactions and rollbacks do not count.
+    /// A closure returning `Ok` with a semantic document change commits and
+    /// increments the counter. Empty transactions, structural no-ops, and
+    /// rollbacks do not count as commits; non-empty structural no-ops are tracked
+    /// separately for registry validation.
     ///
     /// # Errors
     /// Propagates the closure's [`CmdError`] after atomic rollback.
@@ -346,10 +353,17 @@ impl<'a> CommandCtx<'a> {
         F: FnOnce(&mut TxContext<'_>) -> Result<T, CmdError>,
     {
         self.tx_attempts += 1;
-        let outcome = self.session.transact(label, f)?;
+        let mut had_operations = false;
+        let outcome = self.session.transact(label, |tx| {
+            let result = f(tx);
+            had_operations = tx.has_operations();
+            result
+        })?;
         if let Some(tx) = outcome.transaction.as_ref() {
             self.tx_count += 1;
             self.last_tx_seq = Some(tx.seq());
+        } else if had_operations {
+            self.semantic_noop_count += 1;
         }
         if let Some(cs) = outcome.change_set {
             self.change_sets.push(cs);
@@ -408,6 +422,11 @@ impl<'a> CommandCtx<'a> {
     /// Returns the number of command-level transaction calls, including failures.
     pub(crate) fn tx_attempts(&self) -> u32 {
         self.tx_attempts
+    }
+
+    /// Returns the number of non-empty attempts discarded as structural no-ops.
+    pub(crate) fn semantic_noop_count(&self) -> u32 {
+        self.semantic_noop_count
     }
 
     /// Returns the sequence of the command's last committed transaction.

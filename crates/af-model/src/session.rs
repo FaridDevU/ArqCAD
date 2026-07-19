@@ -18,7 +18,8 @@ use crate::units::Units;
 
 /// Result of [`Session::transact`].
 ///
-/// Empty transactions return `None` for both transaction and change set.
+/// Empty and semantic no-op transactions return `None` for both transaction
+/// and change set.
 #[derive(Debug)]
 pub struct TxOutcome<T> {
     /// Value returned by the closure.
@@ -128,8 +129,9 @@ impl Session {
     /// Runs a closure with a [`TxContext`], committing on success or rolling back
     /// atomically on error.
     ///
-    /// Successful non-empty closures commit and return a transaction/change set;
-    /// empty closures return neither. Errors apply recorded inverses in reverse.
+    /// Successful state-changing closures commit and return a
+    /// transaction/change set; empty closures and semantic no-ops return
+    /// neither. Errors restore the pre-transaction snapshot.
     ///
     /// Closure errors must support conversion from [`TxError`].
     ///
@@ -169,6 +171,14 @@ impl Session {
         match result {
             Ok(value) => {
                 if ops.is_empty() {
+                    return Ok(TxOutcome {
+                        value,
+                        transaction: None,
+                        change_set: None,
+                    });
+                }
+                if self.doc == before {
+                    self.doc = before;
                     return Ok(TxOutcome {
                         value,
                         transaction: None,

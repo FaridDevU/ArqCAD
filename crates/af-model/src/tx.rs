@@ -3,8 +3,8 @@
 //! [`Session::transact`](crate::session::Session::transact) lends a [`TxContext`]
 //! that applies each change immediately and records a reversible [`DocOp`] snapshot.
 //!
-//! Non-empty success commits a [`Transaction`] and change set. Empty success
-//! produces neither. Errors apply recorded inverses in reverse for exact rollback.
+//! State-changing success commits a [`Transaction`] and change set. Empty or
+//! semantic no-op success produces neither. Errors restore the exact snapshot.
 //!
 //! # Operation inverses
 //!
@@ -375,6 +375,12 @@ impl<'a> TxContext<'a> {
         &*self.doc
     }
 
+    /// Whether this transaction has recorded at least one document operation.
+    #[must_use]
+    pub fn has_operations(&self) -> bool {
+        !self.ops.is_empty()
+    }
+
     /// Runs a nested savepoint inside this transaction.
     ///
     /// Successful operations merge into the outer transaction without creating
@@ -443,6 +449,8 @@ impl<'a> TxContext<'a> {
     }
 
     /// Removes an entity from any container and records its draw position.
+    /// Every occurrence in every group is pruned first, preserving the order
+    /// and multiplicity of all remaining members.
     ///
     /// # Errors
     /// Returns [`TxError::UnknownEntity`] for an unknown ID.
@@ -452,6 +460,24 @@ impl<'a> TxContext<'a> {
             .entity(id)
             .map(|(_, c)| c)
             .ok_or(TxError::UnknownEntity(id))?;
+
+        let groups: Vec<Group> = self
+            .doc
+            .groups()
+            .filter(|group| group.members().contains(&id))
+            .cloned()
+            .collect();
+        for group in groups {
+            let members = group
+                .members()
+                .iter()
+                .copied()
+                .filter(|member| *member != id)
+                .collect();
+            let group_id = group.id();
+            self.modify_group_raw(group_id, group.with_members(members))?;
+        }
+
         let c = self
             .doc
             .container_mut(container)
