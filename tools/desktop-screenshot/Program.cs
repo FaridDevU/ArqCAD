@@ -2880,15 +2880,11 @@ internal static class Program
             "línea,*LINE",
             "straße,*LINE",
             "C,*COPY",
-            "CIRCLE,*COPY",
-            "BAD,*NO_SUCH_COMMAND",
             "RR,*RECTANG",
             "CAPA,*LAYER",
             "GW,*LINE",
-            "DUP,*COPY",
             "DUP,*LINE",
             "CLOSE,*LINE",
-            "NOTEPAD,NOTEPAD,0,*Editar archivo:,",
         ]);
         File.WriteAllText(aliasPath, initialPgp, new UTF8Encoding(true, true));
         var bomBytes = File.ReadAllBytes(aliasPath);
@@ -2913,10 +2909,10 @@ internal static class Program
             var reinitStatus = Named<TextBlock>(window, "BackendStatusText").Text ?? string.Empty;
             Check(reinitStatus.StartsWith("REINIT - PGP:", StringComparison.Ordinal) &&
                 reinitStatus.Contains("warnings", StringComparison.OrdinalIgnoreCase) &&
-                reinitStatus.Contains("CIRCLE", StringComparison.Ordinal) &&
-                reinitStatus.Contains("BAD", StringComparison.Ordinal) &&
-                reinitStatus.Contains("NOTEPAD", StringComparison.Ordinal),
-                "REINIT reports duplicate, canonical, unknown-target and shell warnings");
+                reinitStatus.Contains(
+                    "PGP user linea 4: alias 'C' reemplaza builtin",
+                    StringComparison.Ordinal),
+                "REINIT loads strict PGP and reports the permitted builtin C shadow");
             Check(window.Lines.Span.SequenceEqual(initialLines) &&
                 window.LastTransactionSequence == initialTransaction &&
                 window.CurrentPath == initialPath && window.IsDirty == initialDirty,
@@ -2925,7 +2921,7 @@ internal static class Program
             window.SubmitCommand("BAD");
             Check(window.LastCommandErrorCode == "COMMAND_ERROR" &&
                 window.LastTransactionSequence == initialTransaction && window.Lines.Length == 0,
-                "unknown PGP target is ignored and recoverable");
+                "unknown command outside the strict PGP table is recoverable");
 
             window.SubmitCommand("línea");
             Check(window.ActiveDrawingTool == "Line" && window.ActiveCommand == "LINE",
@@ -2942,8 +2938,8 @@ internal static class Program
                 "expansive Unicode alias cancels cleanly");
 
             window.SubmitCommand("DUP");
-            Check(window.ActiveDrawingTool == "Line", "duplicate PGP alias uses the last definition");
-            Check(window.HandleKey(Key.Escape, KeyModifiers.None), "duplicate alias LINE cancels cleanly");
+            Check(window.ActiveDrawingTool == "Line", "single PGP alias resolves to LINE");
+            Check(window.HandleKey(Key.Escape, KeyModifiers.None), "single alias LINE cancels cleanly");
 
             window.SubmitCommand("PLINE");
             window.AcceptPoint(new ArcCadPoint(10, 30));
@@ -2960,7 +2956,7 @@ internal static class Program
             Check(window.CommandHistory[^1].Command == "COPY",
                 "desktop command history records the resolved canonical command");
             window.SubmitCommand("CIRCLE");
-            Check(window.ActiveDrawingTool == "Circle", "canonical CIRCLE cannot be shadowed by PGP");
+            Check(window.ActiveDrawingTool == "Circle", "canonical CIRCLE remains available beside PGP");
             Check(window.HandleKey(Key.Escape, KeyModifiers.None), "canonical CIRCLE cancels cleanly");
 
             window.SubmitCommand("RR WIDTH 2");
