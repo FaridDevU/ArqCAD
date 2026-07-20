@@ -71,13 +71,35 @@ fn circle_center_radius_default_mode() {
 }
 
 #[test]
+fn circle_center_diameter() {
+    let (reg, mut session) = setup();
+    let out = reg
+        .execute(
+            &mut session,
+            "CIRCLE",
+            &json!({ "center": [2, 3], "diameter": 10 }),
+        )
+        .expect("CIRCLE center-diameter");
+    assert_eq!(
+        created_geo(&session, &out),
+        EntityGeometry::Circle(CircleGeo::new(Point2::new(2.0, 3.0), 5.0))
+    );
+}
+
+#[test]
 fn circle_alias_c_two_points_diameter() {
     let (reg, mut session) = setup();
     let out = reg
         .execute(
             &mut session,
             "c",
-            &json!({ "mode": "2p", "p1": [0, 0], "p2": [4, 0] }),
+            &json!({
+                "mode": "2p",
+                "p1": [0, 0],
+                "p2": [4, 0],
+                "radius": 99,
+                "diameter": 88,
+            }),
         )
         .expect("CIRCLE 2p via alias");
     assert_eq!(
@@ -141,6 +163,41 @@ fn circle_missing_radius_in_center_mode() {
     assert_eq!(err, CmdError::MissingParam("radius".to_string()));
 }
 
+#[test]
+fn circle_center_radius_and_diameter_conflict_is_fail_closed() {
+    let (reg, mut session) = setup();
+    let err = reg
+        .execute(
+            &mut session,
+            "CIRCLE",
+            &json!({ "center": [0, 0], "radius": 1, "diameter": 2 }),
+        )
+        .unwrap_err();
+    assert!(matches!(err, CmdError::Failed(_)));
+    assert_eq!(session.document().model_space().len(), 0);
+    assert_eq!(session.history().undo_depth(), 0);
+}
+
+#[test]
+fn circle_center_invalid_diameter_is_rejected_before_tx() {
+    let (reg, mut session) = setup();
+    for diameter in [0.0, -1.0] {
+        let err = reg
+            .execute(
+                &mut session,
+                "CIRCLE",
+                &json!({ "center": [0, 0], "diameter": diameter }),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(&err, CmdError::OutOfRange { param, .. } if param == "diameter"),
+            "got {err:?}"
+        );
+    }
+    assert_eq!(session.document().model_space().len(), 0);
+    assert_eq!(session.history().undo_depth(), 0);
+}
+
 // ---- ARC --------------------------------------------------------------------
 
 #[test]
@@ -182,6 +239,21 @@ fn arc_three_points_swaps_to_keep_ccw_through_midpoint() {
 }
 
 #[test]
+fn arc_three_points_collinear_is_fail_closed() {
+    let (reg, mut session) = setup();
+    let err = reg
+        .execute(
+            &mut session,
+            "ARC",
+            &json!({ "p1": [0, 0], "p2": [1, 0], "p3": [2, 0] }),
+        )
+        .unwrap_err();
+    assert!(matches!(err, CmdError::Failed(m) if m.contains("colineal")));
+    assert_eq!(session.document().model_space().len(), 0);
+    assert_eq!(session.history().undo_depth(), 0);
+}
+
+#[test]
 fn arc_center_start_end_point() {
     let (reg, mut session) = setup();
     let out = reg
@@ -218,6 +290,60 @@ fn arc_center_start_end_angle() {
         a,
         ArcGeo::new(Point2::ORIGIN, 2.0, 0.0, core::f64::consts::PI)
     );
+}
+
+#[test]
+fn arc_cse_end_precedence_and_ccw_sweep_edges() {
+    let (reg, mut session) = setup();
+    let precedence = reg
+        .execute(
+            &mut session,
+            "ARC",
+            &json!({
+                "mode": "cse",
+                "center": [0, 0],
+                "start": [1, 0],
+                "end": [0, 1],
+                "endAngle": core::f64::consts::PI,
+            }),
+        )
+        .expect("ARC end point precedes endAngle");
+    let EntityGeometry::Arc(precedence) = created_geo(&session, &precedence) else {
+        panic!("se esperaba arco");
+    };
+    assert!(close(precedence.end_angle, core::f64::consts::FRAC_PI_2));
+
+    for (start, want) in [
+        ([1.0, 0.0], core::f64::consts::TAU),
+        ([0.0, 1.0], 3.0 * core::f64::consts::FRAC_PI_2),
+    ] {
+        let out = reg
+            .execute(
+                &mut session,
+                "ARC",
+                &json!({ "mode": "cse", "center": [0, 0], "start": start, "endAngle": 0 }),
+            )
+            .expect("ARC CCW sweep edge");
+        let EntityGeometry::Arc(a) = created_geo(&session, &out) else {
+            panic!("se esperaba arco");
+        };
+        assert!(close(a.sweep(), want));
+    }
+}
+
+#[test]
+fn arc_cse_zero_radius_is_rejected_by_tx() {
+    let (reg, mut session) = setup();
+    let err = reg
+        .execute(
+            &mut session,
+            "ARC",
+            &json!({ "mode": "cse", "center": [1, 1], "start": [1, 1], "endAngle": 1 }),
+        )
+        .unwrap_err();
+    assert!(matches!(err, CmdError::Tx(_)), "got {err:?}");
+    assert_eq!(session.document().model_space().len(), 0);
+    assert_eq!(session.history().undo_depth(), 0);
 }
 
 #[test]
@@ -328,6 +454,66 @@ fn ellipse_arc_missing_param_errors() {
         )
         .unwrap_err();
     assert_eq!(err, CmdError::MissingParam("endParam".to_string()));
+}
+
+#[test]
+fn ellipse_ratio_one_is_valid_and_above_one_is_out_of_range() {
+    let (reg, mut session) = setup();
+    let out = reg
+        .execute(
+            &mut session,
+            "ELLIPSE",
+            &json!({ "center": [0, 0], "axisEnd": [3, 0], "ratio": 1 }),
+        )
+        .expect("ratio 1 is a circle-shaped ellipse");
+    let EntityGeometry::Ellipse(e) = created_geo(&session, &out) else {
+        panic!("se esperaba elipse");
+    };
+    assert!(close(e.ratio, 1.0));
+
+    let entities = session.document().model_space().len();
+    let history = session.history().undo_depth();
+    let err = reg
+        .execute(
+            &mut session,
+            "ELLIPSE",
+            &json!({ "center": [0, 0], "axisEnd": [3, 0], "ratio": 1.000_001 }),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(&err, CmdError::OutOfRange { param, .. } if param == "ratio"),
+        "got {err:?}"
+    );
+    assert_eq!(session.document().model_space().len(), entities);
+    assert_eq!(session.history().undo_depth(), history);
+}
+
+#[test]
+fn ellipse_arc_wraps_ccw_and_equal_params_are_full() {
+    let (reg, mut session) = setup();
+    for (start, end, want) in [
+        (5.0, 1.0, core::f64::consts::TAU - 4.0),
+        (0.75, 0.75, core::f64::consts::TAU),
+    ] {
+        let out = reg
+            .execute(
+                &mut session,
+                "ELLIPSE",
+                &json!({
+                    "mode": "arc",
+                    "center": [0, 0],
+                    "axisEnd": [3, 0],
+                    "ratio": 0.5,
+                    "startParam": start,
+                    "endParam": end,
+                }),
+            )
+            .expect("ELLIPSE CCW sweep edge");
+        let EntityGeometry::Ellipse(e) = created_geo(&session, &out) else {
+            panic!("se esperaba elipse");
+        };
+        assert!(close(e.sweep(), want));
+    }
 }
 
 // ---- PLINE ------------------------------------------------------------------

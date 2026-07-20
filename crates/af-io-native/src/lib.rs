@@ -435,7 +435,10 @@ fn zip_to_io(e: zip::result::ZipError) -> Error {
 mod tests {
     use super::*;
     use af_math::Point2;
-    use af_model::entity::{Color, EntityGeometry, EntityRecord, LineGeo, LineTypeRef, Lineweight};
+    use af_model::entity::{
+        ArcGeo, CircleGeo, Color, EllipseGeo, EntityGeometry, EntityRecord, LineGeo, LineTypeRef,
+        Lineweight,
+    };
     use af_model::id::{EntityId, ObjectId};
     use af_model::units::Units;
     use af_model::{ContainerRef, Group, Session, TxError};
@@ -486,6 +489,113 @@ mod tests {
         })
         .unwrap();
         assert_eq!(dj1, dj2, "document.json byte-estable tras roundtrip");
+    }
+
+    #[test]
+    fn circular_shapes_roundtrip_exactly_and_reopen_with_clean_history() {
+        let geometries = [
+            EntityGeometry::Circle(CircleGeo::new(Point2::new(1.0, 2.0), 4.0)),
+            EntityGeometry::Arc(ArcGeo::new(
+                Point2::new(10.0, 0.0),
+                2.0,
+                0.0,
+                core::f64::consts::FRAC_PI_2,
+            )),
+            EntityGeometry::Ellipse(EllipseGeo::new(
+                Point2::new(20.0, 5.0),
+                6.0,
+                0.5,
+                0.0,
+                0.25,
+                2.5,
+            )),
+        ];
+        let mut session = Session::new(Units::default());
+        let layer = session.document().current_layer();
+        let ids = session
+            .transact(
+                "circular shapes",
+                |tx| -> std::result::Result<Vec<EntityId>, TxError> {
+                    let mut ids = Vec::new();
+                    for geometry in &geometries {
+                        ids.push(tx.add_entity(
+                            ContainerRef::ModelSpace,
+                            EntityRecord::new(
+                                ObjectId::NIL.into(),
+                                layer,
+                                Color::ByLayer,
+                                LineTypeRef::ByLayer,
+                                Lineweight::ByLayer,
+                                geometry.clone(),
+                            ),
+                        )?);
+                    }
+                    Ok(ids)
+                },
+            )
+            .unwrap()
+            .value;
+        let expected = session.document().clone();
+        let expected_next_id = expected.next_object_id();
+        let mut validated = expected.clone();
+        assert!(validated.validate_full().is_empty());
+        assert_eq!(validated, expected);
+
+        let bytes = to_bytes(&expected).unwrap();
+        let (loaded, report) = load_bytes(&bytes).unwrap();
+        assert_eq!(report.recovery, Recovery::Normal);
+        assert!(report.issues.is_empty());
+        assert_eq!(loaded, expected);
+        assert_eq!(to_bytes(&loaded).unwrap(), bytes);
+        for (&id, geometry) in ids.iter().zip(&geometries) {
+            assert_eq!(loaded.entity(id).unwrap().0.geometry, *geometry);
+        }
+
+        let mut corrupt_file = serde_json::to_value(DocFileRef {
+            format_version: FORMAT_VERSION,
+            document: &expected,
+        })
+        .unwrap();
+        let ellipse = corrupt_file["document"]["modelSpace"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|record| record["id"].as_u64() == Some(ids[2].raw().0))
+            .unwrap();
+        assert_eq!(ellipse["geometry"]["type"], "ellipse");
+        ellipse["geometry"]["ratio"] = serde_json::json!(1.25);
+        let corrupt = pack_arcf(
+            &serde_json::to_vec(&Manifest::for_document(&expected)).unwrap(),
+            &serde_json::to_vec(&corrupt_file).unwrap(),
+        )
+        .unwrap();
+        let (repaired, report) = load_bytes(&corrupt).unwrap();
+        assert!(repaired.entity(ids[2]).is_none());
+        assert!(report.issues.iter().any(|issue| {
+            issue.severity == Severity::Repaired && issue.object == Some(ids[2].raw())
+        }));
+
+        let mut reopened = Session::from_document(loaded);
+        assert_eq!(reopened.history().undo_depth(), 0);
+        assert_eq!(reopened.history().redo_depth(), 0);
+        let layer = reopened.document().current_layer();
+        let next = reopened
+            .transact("continued circle", |tx| {
+                tx.add_entity(
+                    ContainerRef::ModelSpace,
+                    EntityRecord::new(
+                        ObjectId::NIL.into(),
+                        layer,
+                        Color::ByLayer,
+                        LineTypeRef::ByLayer,
+                        Lineweight::ByLayer,
+                        EntityGeometry::Circle(CircleGeo::new(Point2::new(100.0, 100.0), 1.0)),
+                    ),
+                )
+            })
+            .unwrap();
+        assert_eq!(next.value.raw().0, expected_next_id);
+        assert_eq!(next.transaction.unwrap().seq(), 0);
     }
 
     #[test]

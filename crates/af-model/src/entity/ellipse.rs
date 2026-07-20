@@ -134,7 +134,8 @@ impl EntityOps for EllipseGeo {
     /// Validates finite values and nondegenerate semiaxes.
     ///
     /// # Errors
-    /// Returns [`GeomIssue::NonFinite`] or [`GeomIssue::DegenerateRadius`].
+    /// Returns [`GeomIssue::NonFinite`], [`GeomIssue::InvalidAxisRatio`], or
+    /// [`GeomIssue::DegenerateRadius`].
     fn validate(&self, tol: &Tol) -> Result<(), GeomIssue> {
         if !is_finite(self.center)
             || !self.semi_major.is_finite()
@@ -144,6 +145,9 @@ impl EntityOps for EllipseGeo {
             || !self.end_param.is_finite()
         {
             return Err(GeomIssue::NonFinite);
+        }
+        if self.ratio <= 0.0 || self.ratio > 1.0 {
+            return Err(GeomIssue::InvalidAxisRatio);
         }
         if self.semi_major <= tol.point_merge || self.semi_minor() <= tol.point_merge {
             return Err(GeomIssue::DegenerateRadius);
@@ -329,12 +333,23 @@ mod tests {
         // Degenerate semimajor axis.
         let zero = EllipseGeo::new(Point2::ORIGIN, 0.0, 0.5, 0.0, 0.0, TAU);
         assert_eq!(zero.validate(&tol), Err(GeomIssue::DegenerateRadius));
-        // Near-zero ratio makes the semiminor axis degenerate.
-        let flat = EllipseGeo::new(Point2::ORIGIN, 3.0, 0.0, 0.0, 0.0, TAU);
-        assert_eq!(flat.validate(&tol), Err(GeomIssue::DegenerateRadius));
+        // Ratio has its own model invariant before semiaxis degeneracy.
+        for ratio in [0.0, -0.5, 1.000_000_1] {
+            let invalid = EllipseGeo::new(Point2::ORIGIN, 3.0, ratio, 0.0, 0.0, TAU);
+            assert_eq!(invalid.validate(&tol), Err(GeomIssue::InvalidAxisRatio));
+        }
+        assert!(
+            EllipseGeo::new(Point2::ORIGIN, 3.0, 1.0, 0.0, 0.0, TAU)
+                .validate(&tol)
+                .is_ok()
+        );
+        let tiny = EllipseGeo::new(Point2::ORIGIN, 3.0, f64::MIN_POSITIVE, 0.0, 0.0, TAU);
+        assert_eq!(tiny.validate(&tol), Err(GeomIssue::DegenerateRadius));
         // Nonfinite value.
         let bad = EllipseGeo::new(Point2::new(f64::NAN, 0.0), 3.0, 0.5, 0.0, 0.0, TAU);
         assert_eq!(bad.validate(&tol), Err(GeomIssue::NonFinite));
+        let bad_ratio = EllipseGeo::new(Point2::ORIGIN, 3.0, f64::NAN, 0.0, 0.0, TAU);
+        assert_eq!(bad_ratio.validate(&tol), Err(GeomIssue::NonFinite));
     }
 
     #[test]

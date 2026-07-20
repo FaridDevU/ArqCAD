@@ -460,6 +460,130 @@ fn save_open_roundtrip_preserves_lines_history_sequence_and_next_id() {
 }
 
 #[test]
+fn circular_shapes_use_the_real_gateway_fail_closed_and_roundtrip_exactly() {
+    let run = |handle, command: &[u8], args: &[u8]| {
+        let (status, mut output) = execute(handle, command, args);
+        assert_eq!(status, AF_STATUS_OK);
+        let value = parse_json(&output);
+        // SAFETY: exact live metadata returned by `execute` above.
+        assert_eq!(unsafe { af_utf8_buffer_free(&mut output) }, AF_STATUS_OK);
+        value
+    };
+    let save_bytes = |handle| {
+        let (status, mut output) = save(handle);
+        assert_eq!(status, AF_STATUS_OK);
+        let bytes = byte_values(&output).to_vec();
+        // SAFETY: exact live metadata returned by `save` above.
+        assert_eq!(unsafe { af_byte_buffer_free(&mut output) }, AF_STATUS_OK);
+        bytes
+    };
+    let render_json = |handle| {
+        let (status, mut output) = render(handle);
+        assert_eq!(status, AF_STATUS_OK);
+        let value = parse_json(&output);
+        // SAFETY: exact live metadata returned by `render` above.
+        assert_eq!(unsafe { af_utf8_buffer_free(&mut output) }, AF_STATUS_OK);
+        value
+    };
+
+    let source = create_session();
+    let commands: [(&[u8], &[u8]); 3] = [
+        (b"CIRCLE", br#"{"center":[1,2],"diameter":8}"#),
+        (
+            b"ARC",
+            br#"{"mode":"cse","center":[10,0],"start":[12,0],"end":[10,2]}"#,
+        ),
+        (
+            b"ELLIPSE",
+            br#"{"mode":"arc","center":[20,5],"axisEnd":[26,5],"ratio":0.5,"startParam":0.25,"endParam":2.5}"#,
+        ),
+    ];
+    let mut ids = Vec::new();
+    for (tx_seq, (command, args)) in commands.into_iter().enumerate() {
+        let result = run(source, command, args);
+        assert_eq!(result.as_object().unwrap().len(), 1);
+        assert_eq!(result["ok"]["txSeq"], tx_seq as u64);
+        let created = result["ok"]["created"].as_array().unwrap();
+        assert_eq!(created.len(), 1);
+        ids.push(created[0].as_u64().unwrap());
+    }
+    assert!(ids.windows(2).all(|pair| pair[1] == pair[0] + 1));
+
+    let before_bytes = save_bytes(source);
+    let before_render = render_json(source);
+    let invalid: [(&[u8], &[u8], &str); 3] = [
+        (
+            b"CIRCLE",
+            br#"{"center":[0,0],"radius":2,"diameter":4}"#,
+            "command_failed",
+        ),
+        (
+            b"ARC",
+            br#"{"mode":"3p","p1":[0,0],"p2":[1,0],"p3":[2,0]}"#,
+            "command_failed",
+        ),
+        (
+            b"ELLIPSE",
+            br#"{"center":[0,0],"axisEnd":[3,0],"ratio":1.25}"#,
+            "out_of_range",
+        ),
+    ];
+    for (command, args, code) in invalid {
+        let result = run(source, command, args);
+        assert_eq!(result["error"]["code"], code);
+        assert_eq!(save_bytes(source), before_bytes);
+        assert_eq!(render_json(source), before_render);
+    }
+
+    let target = create_session();
+    let (status, mut opened) = open(target, &before_bytes);
+    assert_eq!(status, AF_STATUS_OK);
+    assert_eq!(parse_json(&opened), json!({"ok": []}));
+    // SAFETY: exact live metadata returned by `open` above.
+    assert_eq!(unsafe { af_utf8_buffer_free(&mut opened) }, AF_STATUS_OK);
+    assert_eq!(save_bytes(target), before_bytes);
+
+    let (status, mut control, mut vertices) = render_delta(target);
+    assert_eq!(status, AF_STATUS_OK);
+    let delta = parse_json(&control);
+    let mut reopened_ids: Vec<u64> = delta["upserts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|batch| batch["strips"].as_array().unwrap())
+        .map(|strip| strip["entity"].as_u64().unwrap())
+        .collect();
+    reopened_ids.sort_unstable();
+    reopened_ids.dedup();
+    let mut expected_ids = ids.clone();
+    expected_ids.sort_unstable();
+    assert_eq!(reopened_ids, expected_ids);
+    assert!(!float_values(&vertices).is_empty());
+    // SAFETY: exact live metadata returned by `render_delta` above.
+    assert_eq!(unsafe { af_utf8_buffer_free(&mut control) }, AF_STATUS_OK);
+    assert_eq!(unsafe { af_f32_buffer_free(&mut vertices) }, AF_STATUS_OK);
+
+    for (command, code) in [
+        (b"UNDO".as_slice(), "nothing_to_undo"),
+        (b"REDO".as_slice(), "nothing_to_redo"),
+    ] {
+        let result = run(target, command, b"null");
+        assert_eq!(result["error"]["code"], code);
+    }
+    assert_eq!(save_bytes(target), before_bytes);
+
+    let continued = run(target, b"CIRCLE", br#"{"center":[100,100],"diameter":2}"#);
+    assert_eq!(continued["ok"]["txSeq"], 0);
+    assert_eq!(
+        continued["ok"]["created"],
+        json!([ids.iter().copied().max().unwrap() + 1])
+    );
+
+    assert_eq!(af_session_destroy(source), AF_STATUS_OK);
+    assert_eq!(af_session_destroy(target), AF_STATUS_OK);
+}
+
+#[test]
 fn save_destroy_open_roundtrips_each_history_checkpoint() {
     let cases: [(&str, &[&[u8]], usize); 3] = [
         ("commit", &[], 2),

@@ -167,6 +167,40 @@ fn ttr_line_line_perpendicular_pick_selects_center() {
     }
 }
 
+#[test]
+fn ttr_pick_association_pair_swap_and_exact_tie() {
+    let (reg, mut session) = setup();
+    let ids = seed(
+        &mut session,
+        vec![line([-5.0, 0.0], [5.0, 0.0]), line([0.0, -5.0], [0.0, 5.0])],
+    );
+    for (pair, p1, p2, want) in [
+        ([ids[0], ids[1]], [3.0, 4.0], [-2.0, 5.0], [1.0, 1.0]),
+        ([ids[1], ids[0]], [-2.0, 5.0], [3.0, 4.0], [1.0, 1.0]),
+        ([ids[0], ids[1]], [-2.0, 5.0], [3.0, 4.0], [-1.0, 1.0]),
+        ([ids[0], ids[1]], [0.0, 0.0], [0.0, 0.0], [-1.0, -1.0]),
+    ] {
+        let out = reg
+            .execute(
+                &mut session,
+                "CIRCLE",
+                &json!({
+                    "mode": "ttr",
+                    "entities": ids_json(&pair),
+                    "p1": p1,
+                    "p2": p2,
+                    "radius": 1,
+                }),
+            )
+            .expect("TTR pick association case");
+        let center = created_circle(&session, &out).center;
+        assert!(
+            close_pt(center, Point2::new(want[0], want[1])),
+            "{center:?}"
+        );
+    }
+}
+
 // ---- Line-circle TTR ---------------------------------------------------------
 
 #[test]
@@ -233,6 +267,31 @@ fn ttr_circle_circle() {
     assert!(residual(&circle([4.0, 0.0], 2.0), c.center, 1.0) < TOL);
 }
 
+#[test]
+fn ttr_candidate_enclosing_sources_uses_opposite_side_contacts() {
+    let (reg, mut session) = setup();
+    let ids = seed(
+        &mut session,
+        vec![circle([0.0, 0.0], 1.0), circle([8.0, 0.0], 1.0)],
+    );
+    let out = reg
+        .execute(
+            &mut session,
+            "CIRCLE",
+            &json!({
+                "mode": "ttr",
+                "entities": ids_json(&ids),
+                "p1": [-1, 0],
+                "p2": [9, 0],
+                "radius": 5,
+            }),
+        )
+        .expect("candidate encloses both sources");
+    let c = created_circle(&session, &out);
+    assert!(close_pt(c.center, Point2::new(4.0, 0.0)));
+    assert!(close(c.radius, 5.0));
+}
+
 // ---- No solution -------------------------------------------------------------
 
 #[test]
@@ -262,6 +321,34 @@ fn ttr_no_solution_errors_and_zero_tx() {
         matches!(err, CmdError::Failed(ref m) if m.contains("tangente")),
         "err {err:?}"
     );
+    assert_eq!(session.document().model_space().len(), entities);
+    assert_eq!(session.history().undo_depth(), before);
+}
+
+#[test]
+fn ttr_nonfinite_scores_error_without_mutation() {
+    let (reg, mut session) = setup();
+    let ids = seed(
+        &mut session,
+        vec![line([-5.0, 0.0], [5.0, 0.0]), line([0.0, -5.0], [0.0, 5.0])],
+    );
+    let before = session.history().undo_depth();
+    let entities = session.document().model_space().len();
+
+    let err = reg
+        .execute(
+            &mut session,
+            "CIRCLE",
+            &json!({
+                "mode": "ttr",
+                "entities": ids_json(&ids),
+                "p1": [f64::MAX, f64::MAX],
+                "p2": [f64::MAX, f64::MAX],
+                "radius": 1,
+            }),
+        )
+        .unwrap_err();
+    assert!(matches!(err, CmdError::Failed(_)), "err {err:?}");
     assert_eq!(session.document().model_space().len(), entities);
     assert_eq!(session.history().undo_depth(), before);
 }

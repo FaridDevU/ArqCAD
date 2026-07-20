@@ -7,7 +7,7 @@
 //! TTR accepts an entity set and one pick point for each tangent entity.
 
 use af_geom::circle::circumcircle;
-use af_geom::{TangentCurve, tangent_circle_centers};
+use af_geom::{TangentCurve, tangent_circle_centers, tangent_contact_point};
 use af_model::Document;
 use af_model::entity::{CircleGeo, EntityGeometry};
 use af_model::id::EntityId;
@@ -33,6 +33,7 @@ pub fn circle_spec() -> CommandSpec {
         ))
         .param(ParamSpec::optional("center", ParamType::Point))
         .param(ParamSpec::optional("radius", ParamType::Distance))
+        .param(ParamSpec::optional("diameter", ParamType::Distance))
         .param(ParamSpec::optional("p1", ParamType::Point))
         .param(ParamSpec::optional("p2", ParamType::Point))
         .param(ParamSpec::optional("p3", ParamType::Point))
@@ -44,7 +45,20 @@ fn circle_exec(ctx: &mut CommandCtx<'_>, args: ParsedArgs) -> Result<CommandOutc
     // Registry validation inserts the canonical default mode.
     let mode = args.enum_value("mode").unwrap_or("center");
     let geo = match mode {
-        "center" => CircleGeo::new(req_point(&args, "center")?, req_distance(&args, "radius")?),
+        "center" => {
+            let center = req_point(&args, "center")?;
+            let radius = match (args.distance("radius"), args.distance("diameter")) {
+                (Some(radius), None) => radius,
+                (None, Some(diameter)) => diameter / 2.0,
+                (None, None) => return Err(CmdError::MissingParam("radius".to_string())),
+                (Some(_), Some(_)) => {
+                    return Err(CmdError::Failed(
+                        "CIRCLE center: especifica radius o diameter, no ambos".to_string(),
+                    ));
+                }
+            };
+            CircleGeo::new(center, radius)
+        }
         "2p" => {
             let p1 = req_point(&args, "p1")?;
             let p2 = req_point(&args, "p2")?;
@@ -79,8 +93,8 @@ fn circle_exec(ctx: &mut CommandCtx<'_>, args: ParsedArgs) -> Result<CommandOutc
 /// Arcs contribute their complete supporting circle and line segments contribute
 /// their infinite line, allowing tangency to object extensions.
 ///
-/// The chosen center minimizes its summed distance to both pick points. No valid
-/// center produces an error before any transaction.
+/// The chosen center minimizes each tangent contact's distance to its associated
+/// pick point. No valid center produces an error before any transaction.
 fn ttr_geo(doc: &Document, args: &ParsedArgs) -> Result<CircleGeo, CmdError> {
     let ids = args
         .entity_set("entities")
@@ -100,11 +114,29 @@ fn ttr_geo(doc: &Document, args: &ParsedArgs) -> Result<CircleGeo, CmdError> {
 
     let center = tangent_circle_centers(&curve1, &curve2, radius)
         .into_iter()
-        .min_by(|a, b| {
-            let da = a.dist(pick1) + a.dist(pick2);
-            let db = b.dist(pick1) + b.dist(pick2);
-            da.partial_cmp(&db).unwrap_or(core::cmp::Ordering::Equal)
+        .filter_map(|center| {
+            if !center.x.is_finite() || !center.y.is_finite() {
+                return None;
+            }
+            let contact1 = tangent_contact_point(&curve1, center, radius)?;
+            let contact2 = tangent_contact_point(&curve2, center, radius)?;
+            if !contact1.x.is_finite()
+                || !contact1.y.is_finite()
+                || !contact2.x.is_finite()
+                || !contact2.y.is_finite()
+            {
+                return None;
+            }
+            let score = contact1.dist(pick1) + contact2.dist(pick2);
+            score.is_finite().then_some((center, score))
         })
+        .min_by(|(a, score_a), (b, score_b)| {
+            score_a
+                .total_cmp(score_b)
+                .then_with(|| a.x.total_cmp(&b.x))
+                .then_with(|| a.y.total_cmp(&b.y))
+        })
+        .map(|(center, _)| center)
         .ok_or_else(|| {
             CmdError::Failed(
                 "CIRCLE TTR: no existe círculo del radio dado tangente a ambas entidades"

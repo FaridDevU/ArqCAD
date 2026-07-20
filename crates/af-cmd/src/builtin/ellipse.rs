@@ -39,6 +39,12 @@ fn ellipse_exec(ctx: &mut CommandCtx<'_>, args: ParsedArgs) -> Result<CommandOut
     let center = req_point(&args, "center")?;
     let axis_end = req_point(&args, "axisEnd")?;
     let ratio = req_distance(&args, "ratio")?;
+    if ratio > 1.0 {
+        return Err(CmdError::OutOfRange {
+            param: "ratio".to_string(),
+            message: "ratio debe ser menor o igual que 1".to_string(),
+        });
+    }
     let major = axis_end - center;
     let semi_major = major.norm();
     let rotation = angle_of(major);

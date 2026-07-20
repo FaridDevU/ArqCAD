@@ -1361,6 +1361,138 @@ mod pgp_aliases {
     }
 }
 
+#[cfg(test)]
+mod circular_shapes_gateway {
+    use super::*;
+    use af_model::entity::{ArcGeo, CircleGeo, EllipseGeo};
+    use af_model::units::Units;
+    use serde_json::json;
+
+    #[test]
+    fn circular_shapes_execute_json_fail_closed_and_roundtrip_exactly() {
+        let mut session = ApiSession::new(Units::default());
+        let cases = [
+            (
+                "CIRCLE",
+                r#"{"center":[1,2],"diameter":8}"#,
+                EntityGeometry::Circle(CircleGeo::new(Point2::new(1.0, 2.0), 4.0)),
+            ),
+            (
+                "ARC",
+                r#"{"mode":"cse","center":[10,0],"start":[12,0],"end":[10,2]}"#,
+                EntityGeometry::Arc(ArcGeo::new(
+                    Point2::new(10.0, 0.0),
+                    2.0,
+                    0.0,
+                    core::f64::consts::FRAC_PI_2,
+                )),
+            ),
+            (
+                "ELLIPSE",
+                r#"{"mode":"arc","center":[20,5],"axisEnd":[26,5],"ratio":0.5,"startParam":0.25,"endParam":2.5}"#,
+                EntityGeometry::Ellipse(EllipseGeo::new(
+                    Point2::new(20.0, 5.0),
+                    6.0,
+                    0.5,
+                    0.0,
+                    0.25,
+                    2.5,
+                )),
+            ),
+        ];
+
+        let mut ids = Vec::new();
+        for (tx_seq, (name, args, expected)) in cases.iter().enumerate() {
+            let result: Value = serde_json::from_str(&session.execute_json(name, args)).unwrap();
+            assert_eq!(result.as_object().unwrap().len(), 1);
+            assert_eq!(result["ok"]["txSeq"], tx_seq as u64);
+            let created = result["ok"]["created"].as_array().unwrap();
+            assert_eq!(created.len(), 1);
+            let id = created[0].as_u64().unwrap();
+            ids.push(id);
+            let (record, container) = session
+                .session
+                .document()
+                .entity(EntityId::from(ObjectId(id)))
+                .unwrap();
+            assert_eq!(container, CONTAINER);
+            assert_eq!(&record.geometry, expected);
+        }
+        assert!(ids.windows(2).all(|pair| pair[1] == pair[0] + 1));
+
+        let snapshot = |session: &ApiSession| {
+            json!({
+                "document": session.save().unwrap(),
+                "info": session.doc_info(),
+                "nextObjectId": session.session.document().next_object_id(),
+                "undoDepth": session.session.history().undo_depth(),
+                "redoDepth": session.session.history().redo_depth(),
+                "selection": session.selection(),
+                "index": session.index.ids().iter().map(|id| id.raw().0).collect::<Vec<_>>(),
+                "render": view_from_model(&session.render),
+                "renderSeen": view_from_model(&session.render_seen),
+                "events": &session.events,
+            })
+        };
+        let before = snapshot(&session);
+        for (name, args, code) in [
+            (
+                "CIRCLE",
+                r#"{"center":[0,0],"radius":2,"diameter":4}"#,
+                "command_failed",
+            ),
+            (
+                "ARC",
+                r#"{"mode":"3p","p1":[0,0],"p2":[1,0],"p3":[2,0]}"#,
+                "command_failed",
+            ),
+            (
+                "ELLIPSE",
+                r#"{"center":[0,0],"axisEnd":[3,0],"ratio":1.25}"#,
+                "out_of_range",
+            ),
+        ] {
+            let result: Value = serde_json::from_str(&session.execute_json(name, args)).unwrap();
+            assert_eq!(result["error"]["code"], code);
+            assert_eq!(snapshot(&session), before, "{name} must be fail-closed");
+        }
+
+        let saved = session.save().unwrap();
+        let next_id = session.session.document().next_object_id();
+        let expected: Vec<_> = ids
+            .iter()
+            .map(|&id| {
+                let id = EntityId::from(ObjectId(id));
+                (
+                    id,
+                    session.session.document().entity(id).unwrap().0.geometry,
+                )
+            })
+            .collect();
+        let mut reopened = ApiSession::new(Units::default());
+        assert!(reopened.open(&saved).unwrap().is_empty());
+        assert_eq!(reopened.save().unwrap(), saved);
+        assert_eq!(reopened.session.document(), session.session.document());
+        for (id, geometry) in expected {
+            assert_eq!(
+                reopened.session.document().entity(id).unwrap().0.geometry,
+                geometry
+            );
+        }
+        let info = reopened.doc_info();
+        assert_eq!(info.entity_count, 3);
+        assert!(!info.can_undo);
+        assert!(!info.can_redo);
+
+        let continued: Value = serde_json::from_str(
+            &reopened.execute_json("CIRCLE", r#"{"center":[100,100],"diameter":2}"#),
+        )
+        .unwrap();
+        assert_eq!(continued["ok"]["txSeq"], 0);
+        assert_eq!(continued["ok"]["created"], json!([next_id]));
+    }
+}
+
 // ============================ synchronization oracle ============================
 //
 // These unit tests compare internal incremental index and render state against a

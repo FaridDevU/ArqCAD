@@ -134,14 +134,16 @@ impl std::error::Error for TransformError {}
 /// Problem detected by [`EntityOps::validate`].
 ///
 /// Lines and points only use [`GeomIssue::NonFinite`]. Circles may use
-/// `DegenerateRadius`, while polylines may use `TooFewVertices` and
-/// `CoincidentVertices`.
+/// `DegenerateRadius`, ellipses may use `InvalidAxisRatio`, and polylines may
+/// use `TooFewVertices` and `CoincidentVertices`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeomIssue {
     /// A coordinate or scalar is `NaN` or infinite.
     NonFinite,
     /// Radius is at or below `tol.point_merge`.
     DegenerateRadius,
+    /// An ellipse minor-to-major axis ratio is outside `(0, 1]`.
+    InvalidAxisRatio,
     /// Fewer vertices than required; a polyline requires at least two.
     TooFewVertices,
     /// Consecutive vertices coincide within `tol.point_merge`.
@@ -155,6 +157,7 @@ impl core::fmt::Display for GeomIssue {
         let msg = match self {
             GeomIssue::NonFinite => "geometry contains a non-finite coordinate",
             GeomIssue::DegenerateRadius => "radius is below the merge tolerance",
+            GeomIssue::InvalidAxisRatio => "ellipse axis ratio must be in (0, 1]",
             GeomIssue::TooFewVertices => "too few vertices for this geometry",
             GeomIssue::CoincidentVertices => "consecutive vertices coincide within tolerance",
             GeomIssue::ZeroDirection => "direction vector is null (line/ray has no direction)",

@@ -128,6 +128,49 @@ pub fn tangent_point_on(curve: &TangentCurve, center: Point2) -> Point2 {
     }
 }
 
+/// Returns the contact between `curve` and a tangent candidate circle.
+///
+/// Lines use the perpendicular foot. Circles use the radical-axis foot, which
+/// also selects the opposite-side contact when the candidate encloses the source.
+#[must_use]
+pub fn tangent_contact_point(
+    curve: &TangentCurve,
+    candidate_center: Point2,
+    candidate_radius: f64,
+) -> Option<Point2> {
+    let tol = Tol::default();
+    if !finite_point(candidate_center)
+        || !candidate_radius.is_finite()
+        || candidate_radius <= tol.point_merge
+    {
+        return None;
+    }
+
+    let contact = match *curve {
+        TangentCurve::Line { a, b } => perp_foot_line(candidate_center, a, b)?.0,
+        TangentCurve::Circle { center, radius } => {
+            if !finite_point(center) || !radius.is_finite() || radius <= tol.point_merge {
+                return None;
+            }
+            let delta = candidate_center - center;
+            let distance = delta.x.hypot(delta.y);
+            if !distance.is_finite() || distance <= tol.point_merge {
+                return None;
+            }
+            let along = (distance * distance + radius * radius
+                - candidate_radius * candidate_radius)
+                / (2.0 * distance);
+            center + delta * (along / distance)
+        }
+    };
+    finite_point(contact).then_some(contact)
+}
+
+#[inline]
+fn finite_point(point: Point2) -> bool {
+    point.x.is_finite() && point.y.is_finite()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,6 +333,61 @@ mod tests {
         let t2 = tangent_point_on(&circle, Point2::new(3.0, 3.0));
         assert!(close(t2.dist(Point2::new(0.0, 0.0)), 2.0));
         assert!(close_pt(t2, Point2::new(SQRT_2, SQRT_2)));
+    }
+
+    #[test]
+    fn tangent_contact_point_cubre_las_tres_tangencias_circulares() {
+        for (source_radius, candidate_x, candidate_radius, expected_x) in [
+            (2.0, 3.0, 1.0, 2.0),
+            (5.0, 3.0, 2.0, 5.0),
+            (1.0, 2.0, 3.0, -1.0),
+        ] {
+            let source = TangentCurve::Circle {
+                center: Point2::ORIGIN,
+                radius: source_radius,
+            };
+            assert!(close_pt(
+                tangent_contact_point(&source, Point2::new(candidate_x, 0.0), candidate_radius,)
+                    .expect("contacto circular"),
+                Point2::new(expected_x, 0.0),
+            ));
+        }
+    }
+
+    #[test]
+    fn tangent_contact_point_linea_y_entradas_invalidas() {
+        let line = TangentCurve::Line {
+            a: Point2::new(0.0, 0.0),
+            b: Point2::new(4.0, 0.0),
+        };
+        assert_eq!(
+            tangent_contact_point(&line, Point2::new(1.0, 1.0), 1.0),
+            Some(Point2::new(1.0, 0.0))
+        );
+        let degenerate_line = TangentCurve::Line {
+            a: Point2::ORIGIN,
+            b: Point2::ORIGIN,
+        };
+        let circle = TangentCurve::Circle {
+            center: Point2::ORIGIN,
+            radius: 2.0,
+        };
+        assert!(tangent_contact_point(&degenerate_line, Point2::new(1.0, 0.0), 1.0).is_none());
+        assert!(tangent_contact_point(&circle, Point2::new(3.0, 0.0), 0.0).is_none());
+        assert!(tangent_contact_point(&circle, Point2::new(3.0, 0.0), -1.0).is_none());
+        assert!(tangent_contact_point(&circle, Point2::new(3.0, 0.0), f64::NAN).is_none());
+        assert!(tangent_contact_point(&circle, Point2::new(f64::INFINITY, 0.0), 1.0).is_none());
+        assert!(tangent_contact_point(&circle, Point2::ORIGIN, 1.0).is_none());
+        let invalid_circle = TangentCurve::Circle {
+            center: Point2::ORIGIN,
+            radius: 0.0,
+        };
+        assert!(tangent_contact_point(&invalid_circle, Point2::new(1.0, 0.0), 1.0).is_none());
+        let huge = TangentCurve::Circle {
+            center: Point2::ORIGIN,
+            radius: f64::MAX,
+        };
+        assert!(tangent_contact_point(&huge, Point2::new(1.0, 0.0), f64::MAX).is_none());
     }
 
     #[test]

@@ -36,4 +36,4 @@ pub use project::{
     tangent_points,
 };
 pub use revcloud::revcloud_vertices;
-pub use tangent::{TangentCurve, tangent_circle_centers, tangent_point_on};
+pub use tangent::{TangentCurve, tangent_circle_centers, tangent_contact_point, tangent_point_on};
